@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>net.flexispot.monitor</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <!-- Adjust the python3 path if needed: `which python3` -->
+    <string>/usr/local/bin/python3</string>
+    <!-- Replace with the actual path to your clone -->
+    <string>/Users/YOUR_USERNAME/flexispot-shell/monitor.py</string>
+  </array>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>KeepAlive</key>
+  <true/>
+  <!-- Restart throttle in seconds after a crash -->
+  <key>ThrottleInterval</key>
+  <integer>30</integer>
+
+  <key>StandardOutPath</key>
+  <string>/Users/YOUR_USERNAME/flexispot-shell/monitor.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/YOUR_USERNAME/flexispot-shell/monitor.log</string>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/YOUR_USERNAME/flexispot-shell</string>
+</dict>
+</plist>
