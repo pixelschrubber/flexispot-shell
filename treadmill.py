@@ -80,6 +80,31 @@ def kcal_for_interval(speed_kmh: float, dt_seconds: float, weight_kg: float) -> 
     return speed_to_met(speed_kmh) * weight_kg * (dt_seconds / 3600.0)
 
 
+def speed_to_cadence(speed_kmh: float) -> int:
+    """Estimated walking cadence in strides/min (= steps/min ÷ 2).
+    Linear model from walking biomechanics literature; ±10% accuracy."""
+    if speed_kmh <= 0:
+        return 0
+    steps_per_min = 87.0 + 4.8 * speed_kmh
+    return max(0, int(steps_per_min / 2))
+
+
+def load_start_threshold(cfg: dict, idle_power: float,
+                         points: list[tuple[float, float]]) -> float:
+    """Watts above idle that trigger session detection.
+
+    Uses config value if set; otherwise auto-derives as 60% of the net power
+    at the slowest calibrated speed — ensuring even the first speed step
+    is reliably detected regardless of treadmill model.
+    """
+    if "start_threshold_w" in cfg:
+        return float(cfg["start_threshold_w"])
+    if not points:
+        return 10.0
+    min_net = points[0][1] - idle_power
+    return max(5.0, min_net * 0.6)
+
+
 def fmt_duration(seconds: float) -> str:
     h = int(seconds // 3600)
     m = int((seconds % 3600) // 60)
@@ -104,11 +129,14 @@ def write_tcx(start_time: datetime, trackpoints: list[dict], output_path: Path) 
         return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
     def _tp_xml(tp: dict) -> str:
-        pwr = tp.get("power_w", 0.0)
-        ext = (
-            f"<ns3:Speed>{tp['speed_ms']:.3f}</ns3:Speed>"
-            + (f"<ns3:Watts>{int(pwr)}</ns3:Watts>" if pwr > 0 else "")
-        )
+        spd_ms = tp["speed_ms"]
+        pwr    = tp.get("power_w", 0.0)
+        cad    = speed_to_cadence(spd_ms * 3.6)
+        ext = f"<ns3:Speed>{spd_ms:.3f}</ns3:Speed>"
+        if pwr > 0:
+            ext += f"<ns3:Watts>{int(pwr)}</ns3:Watts>"
+        if cad > 0:
+            ext += f"<ns3:RunCadence>{cad}</ns3:RunCadence>"
         return (
             f"      <Trackpoint>\n"
             f"        <Time>{fmt(tp['time'])}</Time>\n"

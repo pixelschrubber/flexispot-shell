@@ -22,6 +22,7 @@ from treadmill import (
     kcal_for_interval,
     load_calibration,
     load_config,
+    load_start_threshold,
     power_to_speed,
     save_activity,
 )
@@ -30,7 +31,6 @@ from strava import try_upload
 LOG_FILE = Path(__file__).parent / "monitor.log"
 
 POLL_INTERVAL   = 5
-START_THRESH_W  = 15.0
 START_CONFIRM_S = 10
 STOP_DELAY_S    = 60
 MIN_SESSION_S   = 60
@@ -79,16 +79,16 @@ def save_session(start_time: datetime, trackpoints: list[dict], weight_kg: float
 
 
 def main():
-    cfg       = load_config()
-    shelly_ip = cfg["shelly_ip"]
-    weight_kg = cfg.get("user_weight_kg", 75.0)
-    cfg_ref   = cfg  # passed through to save_session for Strava
+    cfg            = load_config()
+    shelly_ip      = cfg["shelly_ip"]
+    weight_kg      = cfg.get("user_weight_kg", 75.0)
 
     log.info("Flexispot monitor started")
     idle_power, cal_points = load_calibration()
+    start_thresh = load_start_threshold(cfg, idle_power, cal_points)
     log.info(
         f"Calibration: idle {idle_power:.1f}W, {len(cal_points)} steps, "
-        f"start threshold: >{idle_power + START_THRESH_W:.1f}W"
+        f"start threshold: >{idle_power + start_thresh:.1f}W"
     )
 
     state          = State.WAITING
@@ -114,7 +114,7 @@ def main():
 
         now    = datetime.now(timezone.utc)
         now_ts = time.monotonic()
-        active = power > idle_power + START_THRESH_W
+        active = power > idle_power + start_thresh
 
         if state == State.WAITING:
             if active:
@@ -159,8 +159,8 @@ def main():
                 )
 
             if not active:
-                stop_since = now_ts
-                state = State.STOPPING
+                stop_since   = now_ts
+                state        = State.STOPPING
                 log.info(f"Power gone ({power:.1f}W) — waiting {STOP_DELAY_S}s before saving")
 
         elif state == State.STOPPING:

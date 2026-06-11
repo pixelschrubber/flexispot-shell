@@ -23,6 +23,7 @@ from treadmill import (
     get_power,
     load_calibration,
     load_config,
+    load_start_threshold,
     power_to_speed,
     speed_to_met,
     fmt_duration,
@@ -30,9 +31,8 @@ from treadmill import (
 )
 
 STATE_FILE     = Path(__file__).parent / "session_state.json"
-START_THRESH_W = 15.0
-STOP_DELAY_S   = 60
-MIN_SESSION_S  = 60
+STOP_DELAY_S  = 60
+MIN_SESSION_S = 60
 
 
 def load_state() -> dict:
@@ -68,6 +68,7 @@ def main():
     shelly_ip  = cfg["shelly_ip"]
     weight_kg  = cfg.get("user_weight_kg", 75.0)
     idle_power, cal_pts = load_calibration()
+    start_thresh = load_start_threshold(cfg, idle_power, cal_pts)
 
     now   = time.time()
     state = load_state()
@@ -79,7 +80,7 @@ def main():
         shelly_ok = False
         power     = 0.0
 
-    active    = shelly_ok and power > idle_power + START_THRESH_W
+    active    = shelly_ok and power > idle_power + start_thresh
     speed_kmh = power_to_speed(power, idle_power, cal_pts) if active else 0.0
     speed_ms  = speed_kmh / 3.6
     status    = state.get("status", "idle")
@@ -142,7 +143,7 @@ def main():
         print("🏃 ready")
         print("---")
         print(f"Power: {power:.1f}W  (idle: {idle_power:.1f}W)")
-        print(f"Threshold: >{idle_power + START_THRESH_W:.1f}W to start")
+        print(f"Threshold: >{idle_power + start_thresh:.1f}W to start")
         print("---")
         activities = sorted(OUTPUT_DIR.glob("*.tcx")) if OUTPUT_DIR.exists() else []
         if activities:

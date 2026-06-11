@@ -21,12 +21,12 @@ from treadmill import (
     kcal_for_interval,
     load_calibration,
     load_config,
+    load_start_threshold,
     power_to_speed,
     write_tcx,
 )
 
 POLL_INTERVAL   = 5
-START_THRESH_W  = 15.0
 START_CONFIRM_S = 10
 STOP_DELAY_S    = 60
 MIN_SESSION_S   = 60
@@ -59,6 +59,7 @@ class TreadmillWidget:
         self._shelly_ip  = cfg["shelly_ip"]
         self._weight_kg  = cfg.get("user_weight_kg", 75.0)
         self.idle_power, self.cal_pts = load_calibration()
+        self._start_thresh = load_start_threshold(cfg, self.idle_power, self.cal_pts)
 
         self._lock          = threading.Lock()
         self._state         = State.WAITING
@@ -204,7 +205,7 @@ class TreadmillWidget:
 
             now    = datetime.now(timezone.utc)
             now_m  = time.monotonic()
-            active = power > self.idle_power + START_THRESH_W
+            active = power > self.idle_power + self._start_thresh
 
             if state == State.WAITING:
                 if active:
