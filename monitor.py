@@ -27,6 +27,7 @@ from treadmill import (
     save_activity,
 )
 from strava import try_upload
+from heartrate import load_hr_monitor
 
 LOG_FILE = Path(__file__).parent / "monitor.log"
 
@@ -91,6 +92,12 @@ def main():
         f"start threshold: >{idle_power + start_thresh:.1f}W"
     )
 
+    hr_monitor = load_hr_monitor(cfg)
+    if hr_monitor:
+        log.info(f"HR monitor started for '{cfg['hr_device']}'")
+    else:
+        log.info("HR monitor not configured (set hr_device in config.json)")
+
     state          = State.WAITING
     session_start: datetime | None = None
     trackpoints: list[dict] = []
@@ -139,23 +146,28 @@ def main():
             dt        = (now - trackpoints[-1]["time"]).total_seconds() if trackpoints else 0.0
             total_distance_m += speed_ms * dt
             interval_kcal     = kcal_for_interval(speed_kmh, dt, weight_kg)
+            hr                = hr_monitor.get_hr() if hr_monitor else 0
 
-            trackpoints.append({
+            tp = {
                 "time":       now,
                 "distance_m": total_distance_m,
                 "speed_ms":   speed_ms,
                 "power_w":    power,
                 "kcal":       interval_kcal,
-            })
+            }
+            if hr:
+                tp["heart_rate"] = hr
+            trackpoints.append(tp)
 
             elapsed = (now - session_start).total_seconds()
             if int(elapsed) % 60 < POLL_INTERVAL:
                 running_kcal = int(sum(tp.get("kcal", 0.0) for tp in trackpoints))
                 pace_min     = elapsed / max(total_distance_m / 1000, 0.001) / 60
                 pace_str     = f"{int(pace_min)}:{int((pace_min % 1) * 60):02d} min/km"
+                hr_str       = f"  {hr} bpm" if hr else ""
                 log.info(
                     f"  {fmt_duration(elapsed)}  {power:.1f}W  {speed_kmh:.1f} km/h  "
-                    f"{total_distance_m/1000:.2f} km  {pace_str}  {running_kcal} kcal"
+                    f"{total_distance_m/1000:.2f} km  {pace_str}  {running_kcal} kcal{hr_str}"
                 )
 
             if not active:

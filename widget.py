@@ -14,6 +14,7 @@ import tkinter as tk
 from datetime import datetime, timezone
 from enum import Enum, auto
 
+from heartrate import load_hr_monitor
 from treadmill import (
     OUTPUT_DIR,
     fmt_duration,
@@ -61,6 +62,8 @@ class TreadmillWidget:
         self.idle_power, self.cal_pts = load_calibration()
         self._start_thresh = load_start_threshold(cfg, self.idle_power, self.cal_pts)
 
+        self._hr_monitor    = load_hr_monitor(cfg)
+
         self._lock          = threading.Lock()
         self._state         = State.WAITING
         self._session_start: datetime | None = None
@@ -68,6 +71,7 @@ class TreadmillWidget:
         self._speed_kmh     = 0.0
         self._kcal          = 0.0
         self._pace_str      = "–"
+        self._hr            = 0
         self._saved_fname   = ""
         self._trackpoints   = []
         self._btn_visible   = False
@@ -133,29 +137,26 @@ class TreadmillWidget:
         row = tk.Frame(r, bg=C_BG)
         row.pack(fill="x", padx=0, pady=10)
 
-        left = tk.Frame(row, bg=C_BG)
-        left.pack(side="left", expand=True)
-        tk.Label(left, text="SPEED", font=("Helvetica Neue", 8),
-                 fg=C_GRAY, bg=C_BG).pack()
-        self._speed_lbl = tk.Label(left, text="–",
-                                   font=("Helvetica Neue", 22, "bold"),
-                                   fg=C_DIM, bg=C_BG)
-        self._speed_lbl.pack()
-        tk.Label(left, text="km/h", font=("Helvetica Neue", 9),
-                 fg=C_GRAY, bg=C_BG).pack()
+        def _metric_col(parent, label, unit):
+            f = tk.Frame(parent, bg=C_BG)
+            f.pack(side="left", expand=True)
+            tk.Label(f, text=label, font=("Helvetica Neue", 8),
+                     fg=C_GRAY, bg=C_BG).pack()
+            val = tk.Label(f, text="–", font=("Helvetica Neue", 22, "bold"),
+                           fg=C_DIM, bg=C_BG)
+            val.pack()
+            tk.Label(f, text=unit, font=("Helvetica Neue", 9),
+                     fg=C_GRAY, bg=C_BG).pack()
+            return val
 
-        tk.Frame(row, bg=C_BORDER, width=1).pack(side="left", fill="y", pady=4)
+        def _sep():
+            tk.Frame(row, bg=C_BORDER, width=1).pack(side="left", fill="y", pady=4)
 
-        right = tk.Frame(row, bg=C_BG)
-        right.pack(side="left", expand=True)
-        tk.Label(right, text="DISTANCE", font=("Helvetica Neue", 8),
-                 fg=C_GRAY, bg=C_BG).pack()
-        self._dist_lbl = tk.Label(right, text="–",
-                                  font=("Helvetica Neue", 22, "bold"),
-                                  fg=C_DIM, bg=C_BG)
-        self._dist_lbl.pack()
-        tk.Label(right, text="km", font=("Helvetica Neue", 9),
-                 fg=C_GRAY, bg=C_BG).pack()
+        self._speed_lbl = _metric_col(row, "SPEED",    "km/h")
+        _sep()
+        self._hr_lbl    = _metric_col(row, "HR",       "bpm")
+        _sep()
+        self._dist_lbl  = _metric_col(row, "DISTANCE", "km")
 
         tk.Frame(r, bg=C_BORDER, height=1).pack(fill="x", padx=20)
 
@@ -231,12 +232,16 @@ class TreadmillWidget:
                 total_dist  += speed_ms * dt
                 ikc          = kcal_for_interval(speed_kmh, dt, self._weight_kg)
                 total_kcal  += ikc
-                trackpoints.append({
+                hr            = self._hr_monitor.get_hr() if self._hr_monitor else 0
+                tp            = {
                     "time":       now,
                     "distance_m": total_dist,
                     "speed_ms":   speed_ms,
                     "kcal":       ikc,
-                })
+                }
+                if hr:
+                    tp["heart_rate"] = hr
+                trackpoints.append(tp)
 
                 pace_str = "–"
                 if speed_kmh >= 0.5:
@@ -250,6 +255,7 @@ class TreadmillWidget:
                     self._speed_kmh     = speed_kmh
                     self._kcal          = total_kcal
                     self._pace_str      = pace_str
+                    self._hr            = hr
                     self._trackpoints   = list(trackpoints)
 
                 if not active:
@@ -307,11 +313,15 @@ class TreadmillWidget:
             speed   = self._speed_kmh
             kcal    = self._kcal
             pace    = self._pace_str
+            hr      = self._hr
             saved   = self._saved_fname
             if saved:
                 self._saved_fname = ""
 
         elapsed = (datetime.now(timezone.utc) - start).total_seconds() if start else None
+
+        hr_text  = str(hr) if hr else "–"
+        hr_color = "#ff375f" if hr else C_DIM
 
         if state == State.ACTIVE:
             self._dot.config(fg=C_GREEN)
@@ -319,6 +329,7 @@ class TreadmillWidget:
             self._time_lbl.config(
                 text=fmt_duration(elapsed) if elapsed else "--:--:--", fg=C_GREEN)
             self._speed_lbl.config(text=f"{speed:.1f}", fg=C_WHITE)
+            self._hr_lbl.config(text=hr_text, fg=hr_color)
             self._dist_lbl.config(text=f"{dist_km:.2f}", fg=C_WHITE)
             self._kcal_lbl.config(text=f"{int(kcal)}", fg=C_ORANGE)
             self._pace_lbl.config(text=pace, fg=C_GRAY)
@@ -330,6 +341,7 @@ class TreadmillWidget:
             self._time_lbl.config(
                 text=fmt_duration(elapsed) if elapsed else "--:--:--", fg=C_ORANGE)
             self._speed_lbl.config(text=f"{speed:.1f}", fg=C_WHITE)
+            self._hr_lbl.config(text=hr_text, fg=hr_color)
             self._dist_lbl.config(text=f"{dist_km:.2f}", fg=C_WHITE)
             self._kcal_lbl.config(text=f"{int(kcal)}", fg=C_ORANGE)
             self._pace_lbl.config(text=pace, fg=C_GRAY)
@@ -352,6 +364,7 @@ class TreadmillWidget:
                 self.root.after(4000,
                     lambda: self._status_lbl.config(text="WAITING", fg=C_GRAY))
             else:
+                self._hr_lbl.config(text="–", fg=C_DIM)
                 self._status_lbl.config(text="WAITING", fg=C_GRAY)
 
         self.root.after(1000, self._tick)

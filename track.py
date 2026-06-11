@@ -21,6 +21,7 @@ from treadmill import (
     save_activity,
 )
 from strava import try_upload
+from heartrate import load_hr_monitor
 
 POLL_INTERVAL = 5
 
@@ -29,6 +30,7 @@ def main():
     cfg        = load_config()
     shelly_ip  = cfg["shelly_ip"]
     weight_kg  = cfg.get("user_weight_kg", 75.0)
+    hr_monitor = load_hr_monitor(cfg)
 
     idle_power, cal_points = load_calibration()
 
@@ -68,8 +70,10 @@ def main():
     signal.signal(signal.SIGINT, finish)
     signal.signal(signal.SIGTERM, finish)
 
-    print(f"{'Time':>10}  {'Power':>10}  {'Speed':>12}  {'Distance':>9}  {'Pace':<9}  {'Calories':>8}")
-    print("-" * 72)
+    has_hr = hr_monitor is not None
+    hr_col = f"  {'HR':>6}" if has_hr else ""
+    print(f"{'Time':>10}  {'Power':>10}  {'Speed':>12}  {'Distance':>9}  {'Pace':<9}  {'Calories':>8}{hr_col}")
+    print("-" * (72 + (9 if has_hr else 0)))
 
     while True:
         try:
@@ -94,14 +98,18 @@ def main():
             dt = 0.0
         total_distance_m += speed_ms * dt
         interval_kcal     = kcal_for_interval(speed_kmh, dt, weight_kg)
+        hr                = hr_monitor.get_hr() if hr_monitor else 0
 
-        trackpoints.append({
+        tp = {
             "time":       now,
             "distance_m": total_distance_m,
             "speed_ms":   speed_ms,
             "power_w":    power,
             "kcal":       interval_kcal,
-        })
+        }
+        if hr:
+            tp["heart_rate"] = hr
+        trackpoints.append(tp)
 
         pace_str = "–"
         if speed_kmh >= 0.5:
@@ -109,9 +117,10 @@ def main():
             pace_str = f"{int(pace_min)}:{int((pace_min % 1) * 60):02d} /km"
 
         total_kcal = sum(tp.get("kcal", 0.0) for tp in trackpoints)
+        hr_str     = f"  {hr:>4} bpm" if has_hr else ""
         print(
             f"\r{fmt_duration(elapsed):>10}  {power:>8.1f}W  {speed_kmh:>7.1f} km/h"
-            f"  {total_distance_m/1000:>6.2f} km  {pace_str:<9}  {total_kcal:>5.0f} kcal",
+            f"  {total_distance_m/1000:>6.2f} km  {pace_str:<9}  {total_kcal:>5.0f} kcal{hr_str}",
             end="",
             flush=True,
         )

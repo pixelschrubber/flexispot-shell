@@ -2,6 +2,7 @@
   "shelly_ip": "192.168.1.xxx",
   "user_weight_kg": 75.0,
   "user_age": 35,
+  "hr_device": "",
   "strava": {
     "client_id": "YOUR_CLIENT_ID",
     "client_secret": "YOUR_CLIENT_SECRET",

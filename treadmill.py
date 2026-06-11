@@ -131,16 +131,19 @@ def write_tcx(start_time: datetime, trackpoints: list[dict], output_path: Path) 
     def _tp_xml(tp: dict) -> str:
         spd_ms = tp["speed_ms"]
         pwr    = tp.get("power_w", 0.0)
+        hr     = int(tp.get("heart_rate", 0))
         cad    = speed_to_cadence(spd_ms * 3.6)
         ext = f"<ns3:Speed>{spd_ms:.3f}</ns3:Speed>"
         if pwr > 0:
             ext += f"<ns3:Watts>{int(pwr)}</ns3:Watts>"
         if cad > 0:
             ext += f"<ns3:RunCadence>{cad}</ns3:RunCadence>"
+        hr_xml = f"        <HeartRateBpm><Value>{hr}</Value></HeartRateBpm>\n" if hr > 0 else ""
         return (
             f"      <Trackpoint>\n"
             f"        <Time>{fmt(tp['time'])}</Time>\n"
             f"        <DistanceMeters>{tp['distance_m']:.1f}</DistanceMeters>\n"
+            f"{hr_xml}"
             f"        <Extensions><ns3:TPX>{ext}</ns3:TPX></Extensions>\n"
             f"      </Trackpoint>\n"
         )

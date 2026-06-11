@@ -88,23 +88,27 @@ def write_fit(start_time: datetime, trackpoints: list, output_path: Path) -> Non
     buf += _dat(_LM_EVENT, "IBB", ts0, 0, 0)
 
     # ── record definition (global 20) ─────────────────────────────────────────
-    # timestamp, distance (cm, ×100), speed (mm/s, ×1000), power (W), cadence (strides/min)
+    # timestamp, distance (cm, ×100), speed (mm/s, ×1000), power (W),
+    # heart_rate (bpm), cadence (strides/min)
     buf += _def(_LM_RECORD, 20, [
         (253, 4, _U32),
         (5,   4, _U32),
         (6,   2, _U16),
         (7,   2, _U16),
+        (3,   1, _U8),   # heart_rate: bpm
         (53,  1, _U8),   # cadence: strides/min
     ])
 
     for tp in trackpoints:
         speed_kmh = tp["speed_ms"] * 3.6
         cadence   = int(max(0, (87.0 + 4.8 * speed_kmh) / 2)) if speed_kmh > 0 else 0
-        buf += _dat(_LM_RECORD, "IIHHB",
+        hr        = min(0xFF, int(tp.get("heart_rate", 0)))
+        buf += _dat(_LM_RECORD, "IIHHBB",
             _ts(tp["time"]),
             int(tp["distance_m"] * 100),
             min(0xFFFF, int(tp["speed_ms"] * 1000)),
             min(0xFFFF, int(tp.get("power_w", 0.0))),
+            hr,
             min(0xFF, cadence),
         )
 
