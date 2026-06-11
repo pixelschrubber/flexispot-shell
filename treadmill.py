@@ -88,10 +88,10 @@ def fmt_duration(seconds: float) -> str:
 
 
 def write_tcx(start_time: datetime, trackpoints: list[dict], output_path: Path) -> None:
-    """Write a Garmin Connect-compatible TCX file.
+    """Write a Garmin Connect / Strava-compatible TCX file.
 
-    Each dict in trackpoints needs: time (datetime), distance_m (float),
-    speed_ms (float), kcal (float).
+    Trackpoint dicts need: time (datetime), distance_m (float),
+    speed_ms (float), kcal (float), power_w (float, optional).
     """
     total_dist = trackpoints[-1]["distance_m"] if trackpoints else 0.0
     total_time = (
@@ -103,16 +103,21 @@ def write_tcx(start_time: datetime, trackpoints: list[dict], output_path: Path) 
     def fmt(dt: datetime) -> str:
         return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    tps_xml = "".join(
-        f"      <Trackpoint>\n"
-        f"        <Time>{fmt(tp['time'])}</Time>\n"
-        f"        <DistanceMeters>{tp['distance_m']:.1f}</DistanceMeters>\n"
-        f"        <Extensions><ns3:TPX>"
-        f"<ns3:Speed>{tp['speed_ms']:.3f}</ns3:Speed>"
-        f"</ns3:TPX></Extensions>\n"
-        f"      </Trackpoint>\n"
-        for tp in trackpoints
-    )
+    def _tp_xml(tp: dict) -> str:
+        pwr = tp.get("power_w", 0.0)
+        ext = (
+            f"<ns3:Speed>{tp['speed_ms']:.3f}</ns3:Speed>"
+            + (f"<ns3:Watts>{int(pwr)}</ns3:Watts>" if pwr > 0 else "")
+        )
+        return (
+            f"      <Trackpoint>\n"
+            f"        <Time>{fmt(tp['time'])}</Time>\n"
+            f"        <DistanceMeters>{tp['distance_m']:.1f}</DistanceMeters>\n"
+            f"        <Extensions><ns3:TPX>{ext}</ns3:TPX></Extensions>\n"
+            f"      </Trackpoint>\n"
+        )
+
+    tps_xml = "".join(_tp_xml(tp) for tp in trackpoints)
 
     tcx = (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
@@ -141,3 +146,20 @@ def write_tcx(start_time: datetime, trackpoints: list[dict], output_path: Path) 
     )
     OUTPUT_DIR.mkdir(exist_ok=True)
     output_path.write_text(tcx)
+
+
+def write_fit(start_time: datetime, trackpoints: list[dict], output_path: Path) -> None:
+    """Write a FIT activity file (delegates to fit_writer)."""
+    from fit_writer import write_fit as _write_fit
+    OUTPUT_DIR.mkdir(exist_ok=True)
+    _write_fit(start_time, trackpoints, output_path)
+
+
+def save_activity(start_time: datetime, trackpoints: list[dict]) -> tuple[Path, Path]:
+    """Save both TCX and FIT to activities/. Returns (tcx_path, fit_path)."""
+    stem    = start_time.strftime("treadmill_%Y%m%d_%H%M%S")
+    tcx_out = OUTPUT_DIR / f"{stem}.tcx"
+    fit_out = OUTPUT_DIR / f"{stem}.fit"
+    write_tcx(start_time, trackpoints, tcx_out)
+    write_fit(start_time, trackpoints, fit_out)
+    return tcx_out, fit_out

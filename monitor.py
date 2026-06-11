@@ -23,8 +23,9 @@ from treadmill import (
     load_calibration,
     load_config,
     power_to_speed,
-    write_tcx,
+    save_activity,
 )
+from strava import try_upload
 
 LOG_FILE = Path(__file__).parent / "monitor.log"
 
@@ -53,35 +54,35 @@ class State(Enum):
     STOPPING   = auto()
 
 
-def save_session(start_time: datetime, trackpoints: list[dict], weight_kg: float):
-    duration = (trackpoints[-1]["time"] - start_time).total_seconds()
-    dist_km  = trackpoints[-1]["distance_m"] / 1000
+def save_session(start_time: datetime, trackpoints: list[dict], weight_kg: float, cfg: dict):
+    duration   = (trackpoints[-1]["time"] - start_time).total_seconds()
+    dist_km    = trackpoints[-1]["distance_m"] / 1000
     total_kcal = int(sum(tp.get("kcal", 0.0) for tp in trackpoints))
 
     if duration < MIN_SESSION_S:
         log.info(f"Session too short ({duration:.0f}s) — discarded")
         return
 
-    filename = start_time.strftime("treadmill_%Y%m%d_%H%M%S.tcx")
-    out_path = OUTPUT_DIR / filename
-    write_tcx(start_time, trackpoints, out_path)
+    tcx_path, fit_path = save_activity(start_time, trackpoints)
 
     avg_pace_min = duration / max(dist_km, 0.001) / 60
     pace_str     = f"{int(avg_pace_min)}:{int((avg_pace_min % 1) * 60):02d} min/km"
 
     log.info(
-        f"Session saved: {filename}  |  "
+        f"Session saved: {fit_path.name} + {tcx_path.name}  |  "
         f"Time: {fmt_duration(duration)}  |  "
         f"Distance: {dist_km:.2f} km  |  "
         f"Avg pace: {pace_str}  |  "
         f"Calories: {total_kcal} kcal"
     )
+    try_upload(fit_path, cfg)
 
 
 def main():
     cfg       = load_config()
     shelly_ip = cfg["shelly_ip"]
     weight_kg = cfg.get("user_weight_kg", 75.0)
+    cfg_ref   = cfg  # passed through to save_session for Strava
 
     log.info("Flexispot monitor started")
     idle_power, cal_points = load_calibration()
@@ -168,7 +169,7 @@ def main():
                 log.info(f"Treadmill resumed ({power:.1f}W) — session continues")
             elif now_ts - stop_since >= STOP_DELAY_S:
                 log.info("Session ended")
-                save_session(session_start, trackpoints, weight_kg)
+                save_session(session_start, trackpoints, weight_kg, cfg)
                 state            = State.WAITING
                 session_start    = None
                 trackpoints      = []

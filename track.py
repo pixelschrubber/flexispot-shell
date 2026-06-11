@@ -12,15 +12,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from treadmill import (
-    OUTPUT_DIR,
     fmt_duration,
     get_power,
     kcal_for_interval,
     load_calibration,
     load_config,
     power_to_speed,
-    write_tcx,
+    save_activity,
 )
+from strava import try_upload
 
 POLL_INTERVAL = 5
 
@@ -47,23 +47,22 @@ def main():
             print("No data recorded.")
             sys.exit(0)
 
-        OUTPUT_DIR.mkdir(exist_ok=True)
-        filename = start_time.strftime("treadmill_%Y%m%d_%H%M%S.tcx")
-        out_path = OUTPUT_DIR / filename
-        write_tcx(start_time, trackpoints, out_path)
+        tcx_path, fit_path = save_activity(start_time, trackpoints)
 
-        elapsed       = (trackpoints[-1]["time"] - start_time).total_seconds()
-        dist_km       = total_distance_m / 1000
-        avg_pace_min  = elapsed / max(dist_km, 0.001) / 60
-        total_kcal    = int(sum(tp.get("kcal", 0.0) for tp in trackpoints))
+        elapsed      = (trackpoints[-1]["time"] - start_time).total_seconds()
+        dist_km      = total_distance_m / 1000
+        avg_pace_min = elapsed / max(dist_km, 0.001) / 60
+        total_kcal   = int(sum(tp.get("kcal", 0.0) for tp in trackpoints))
 
-        print(f"\nActivity saved: {out_path}")
+        print(f"\nActivity saved:")
+        print(f"  FIT: {fit_path}")
+        print(f"  TCX: {tcx_path}")
         print(f"  Time:      {fmt_duration(elapsed)}")
         print(f"  Distance:  {dist_km:.2f} km")
         print(f"  Avg pace:  {int(avg_pace_min)}:{int((avg_pace_min % 1) * 60):02d} min/km")
         print(f"  Calories:  {total_kcal} kcal  (weight: {weight_kg:.0f} kg)")
-        print(f"\nImport into Garmin Connect:")
-        print(f"  connect.garmin.com → Activities → Import Activity → {filename}")
+        print(f"\nGarmin Connect: connect.garmin.com → Activities → Import → {fit_path.name}")
+        try_upload(fit_path, cfg)
         sys.exit(0)
 
     signal.signal(signal.SIGINT, finish)
