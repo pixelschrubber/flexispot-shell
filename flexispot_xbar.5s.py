@@ -129,7 +129,8 @@ def main():
         kcal     = state.get("kcal", 0.0)
         indicator = "🟢" if status == "active" else "🟠"
 
-        print(f"{indicator} {fmt_duration(elapsed)}")
+        speed_str = f"{speed_kmh:.1f} km/h" if speed_kmh >= 0.1 else "–"
+        print(f"{indicator} {speed_str}")
         print("---")
         print(f"🕐 Time:      {fmt_duration(elapsed)}")
         print(f"🏃 Speed:     {speed_kmh:.1f} km/h  ({power:.0f}W)")
