@@ -39,8 +39,10 @@ def load_calibration() -> tuple[float, list[tuple[float, float]]]:
 def power_to_speed(power: float, idle: float,
                    points: list[tuple[float, float]]) -> float:
     net = power - idle
-    if net <= 0 or net <= points[0][1] - idle:
+    if net <= 0:
         return 0.0
+    if net <= points[0][1] - idle:
+        return net / max(points[0][1] - idle, 0.1) * points[0][0]
     if net >= points[-1][1] - idle:
         if len(points) >= 2:
             s1, p1 = points[-2]
