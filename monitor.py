@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import logging
 import time
+from collections import deque
 from datetime import datetime, timezone
 from enum import Enum, auto
 from pathlib import Path
@@ -98,6 +99,13 @@ def main():
     else:
         log.info("HR monitor not configured (set hr_device in config.json)")
 
+    smoothing_samples = max(1, cfg.get("power_smoothing_samples", 1))
+    power_history     = deque(maxlen=smoothing_samples)
+    if smoothing_samples > 1:
+        log.info(f"Power smoothing enabled: {smoothing_samples} samples ({smoothing_samples * POLL_INTERVAL}s window)")
+    else:
+        log.info("Power smoothing disabled")
+
     state          = State.WAITING
     session_start: datetime | None = None
     trackpoints: list[dict] = []
@@ -118,6 +126,9 @@ def main():
                 log.warning("Further Shelly errors suppressed...")
             time.sleep(POLL_INTERVAL)
             continue
+
+        power_history.append(power)
+        smooth_power = sum(power_history) / len(power_history)
 
         now    = datetime.now(timezone.utc)
         now_ts = time.monotonic()
@@ -141,7 +152,7 @@ def main():
                 log.info("Session started")
 
         elif state == State.ACTIVE:
-            speed_kmh = power_to_speed(power, idle_power, cal_points)
+            speed_kmh = power_to_speed(smooth_power, idle_power, cal_points)
             speed_ms  = speed_kmh / 3.6
             dt        = (now - trackpoints[-1]["time"]).total_seconds() if trackpoints else 0.0
             total_distance_m += speed_ms * dt
@@ -152,7 +163,7 @@ def main():
                 "time":       now,
                 "distance_m": total_distance_m,
                 "speed_ms":   speed_ms,
-                "power_w":    power,
+                "power_w":    smooth_power,
                 "kcal":       interval_kcal,
             }
             if hr:
@@ -165,8 +176,9 @@ def main():
                 pace_min     = elapsed / max(total_distance_m / 1000, 0.001) / 60
                 pace_str     = f"{int(pace_min)}:{int((pace_min % 1) * 60):02d} min/km"
                 hr_str       = f"  {hr} bpm" if hr else ""
+                power_str = f"{smooth_power:.1f}W" if smooth_power == power else f"{smooth_power:.1f}W (raw {power:.1f}W)"
                 log.info(
-                    f"  {fmt_duration(elapsed)}  {power:.1f}W  {speed_kmh:.1f} km/h  "
+                    f"  {fmt_duration(elapsed)}  {power_str}  {speed_kmh:.1f} km/h  "
                     f"{total_distance_m/1000:.2f} km  {pace_str}  {running_kcal} kcal{hr_str}"
                 )
 
