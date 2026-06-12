@@ -6,7 +6,7 @@ import urllib.request
 from datetime import datetime
 from pathlib import Path
 
-_BASE            = Path(__file__).parent
+_BASE            = Path(__file__).resolve().parent
 CONFIG_FILE      = _BASE / "config.json"
 CALIBRATION_FILE = _BASE / "calibration.json"
 OUTPUT_DIR       = _BASE / "activities"

@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 
 # Allow importing treadmill.py from the same directory
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import json
 import time
@@ -30,7 +30,7 @@ from treadmill import (
     OUTPUT_DIR,
 )
 
-STATE_FILE     = Path(__file__).parent / "session_state.json"
+STATE_FILE     = Path(__file__).resolve().parent / "session_state.json"
 STOP_DELAY_S  = 60
 MIN_SESSION_S = 60
 
@@ -129,7 +129,7 @@ def main():
         kcal     = state.get("kcal", 0.0)
         indicator = "🟢" if status == "active" else "🟠"
 
-        print(f"{indicator} {fmt_duration(elapsed)}  {dist_km:.2f}km  {int(kcal)}kcal")
+        print(f"{indicator} {fmt_duration(elapsed)}")
         print("---")
         print(f"🕐 Time:      {fmt_duration(elapsed)}")
         print(f"🏃 Speed:     {speed_kmh:.1f} km/h  ({power:.0f}W)")
