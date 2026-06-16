@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
-Artistic polar / sunflower visualization of a treadmill session.
+Artistic sunflower / starburst visualization of a treadmill session.
 
-Each radial line = one trackpoint.
   Angle  = position in time (12 o'clock = start, clockwise)
-  Length = speed (longer = faster)
-  Color  = speed (plasma colormap: indigo → magenta → gold)
+  Length = speed at that moment (longer = faster)
+  Color  = plasma colormap (indigo = slow → magenta → gold = fast)
+  Background = radial gradient (dark indigo centre → dark teal edges)
 
 Requires: pip3 install --user --break-system-packages matplotlib
-Enable:   add  "visualize": true  to config.json
+Enable:   "visualize": true  in config.json
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from pathlib import Path
 
 
 def render(start_time: datetime, trackpoints: list[dict], output_path: Path) -> None:
-    """Render the sunflower poster to output_path (PNG)."""
+    """Render and save the poster PNG. Raises ImportError if matplotlib is missing."""
     try:
         import matplotlib
         matplotlib.use("Agg")
@@ -27,8 +27,10 @@ def render(start_time: datetime, trackpoints: list[dict], output_path: Path) -> 
         import numpy as np
         from matplotlib.collections import LineCollection
     except ImportError:
-        print("  Visualization skipped — pip3 install --user --break-system-packages matplotlib")
-        return
+        raise ImportError(
+            "matplotlib not installed — "
+            "pip3 install --user --break-system-packages matplotlib"
+        )
 
     if not trackpoints:
         return
@@ -38,88 +40,86 @@ def render(start_time: datetime, trackpoints: list[dict], output_path: Path) -> 
     times_s  = np.array([(tp["time"] - start_time).total_seconds() for tp in trackpoints])
 
     max_speed = float(speeds.max()) or 1.0
-    min_speed = float(speeds[speeds > 0].min()) if (speeds > 0).any() else 0.0
 
-    # Angles: 12 o'clock = start, clockwise
+    # 12 o'clock = start, clockwise → angle = -π/2 + 2π·(t/total)
     angles = -np.pi / 2 + 2 * np.pi * times_s / total_s
-    # Radius: min speed → short petal, max speed → full-length petal
-    radii  = np.where(speeds > 0, 0.18 + 0.82 * (speeds / max_speed), 0.0)
+    radii  = np.where(speeds > 0, 0.18 + 0.82 * speeds / max_speed, 0.0)
 
     cmap   = plt.cm.plasma
     norm   = mcolors.Normalize(vmin=0, vmax=max_speed)
     colors = cmap(norm(speeds))
 
+    # Cartesian petal endpoints
+    xs = radii * np.cos(angles)
+    ys = radii * np.sin(angles)
+
     # ── Canvas ────────────────────────────────────────────────────────────────
-    fig, ax = plt.subplots(figsize=(10, 10), subplot_kw={"projection": "polar"},
-                           facecolor="#07070e")
-    ax.set_facecolor("#07070e")
+    fig, ax = plt.subplots(figsize=(10, 10), facecolor="#000000")
+    ax.set_aspect("equal")
     ax.set_axis_off()
-    ax.set_ylim(0, 1.18)
+    ax.set_xlim(-1.18, 1.18)
+    ax.set_ylim(-1.18, 1.18)
 
-    # ── Starburst petals with glow ────────────────────────────────────────────
-    segs = [[[a, 0.0], [a, r]] for a, r in zip(angles.tolist(), radii.tolist())]
+    # ── Radial gradient background ─────────────────────────────────────────────
+    size = 1000
+    Y, X = np.mgrid[-1.2:1.2:size * 1j, -1.2:1.2:size * 1j]
+    R = np.clip(np.sqrt(X ** 2 + Y ** 2) / 1.2, 0, 1)
 
-    for lw, alpha in [(16, 0.018), (8, 0.055), (4, 0.13), (1.6, 1.0)]:
+    # Centre: dark indigo (#070514)  →  Edge: dark teal-navy (#061522)
+    r_ch = np.interp(R, [0, 1], [0.027, 0.024])
+    g_ch = np.interp(R, [0, 1], [0.020, 0.083])
+    b_ch = np.interp(R, [0, 1], [0.078, 0.133])
+    bg = np.stack([r_ch, g_ch, b_ch], axis=-1)
+
+    ax.imshow(bg, extent=[-1.2, 1.2, -1.2, 1.2], aspect="auto",
+              origin="lower", zorder=0, interpolation="bilinear")
+
+    # ── Starburst petals with glow layers ─────────────────────────────────────
+    segs = [[[0.0, 0.0], [x, y]] for x, y in zip(xs.tolist(), ys.tolist())]
+
+    for lw, alpha in [(18, 0.015), (9, 0.05), (4.5, 0.12), (1.8, 1.0)]:
         lc = LineCollection(segs, colors=colors, linewidths=lw,
-                            alpha=alpha, capstyle="round")
+                            alpha=alpha, capstyle="round", zorder=1)
         ax.add_collection(lc)
 
     # Glowing dots at petal tips
     mask = radii > 0.18
-    ax.scatter(angles[mask], radii[mask], c=colors[mask], s=6,
-               alpha=0.7, zorder=5, linewidths=0)
-
-    # Subtle outer guide ring
-    ring = np.linspace(0, 2 * np.pi, 360)
-    ax.plot(ring, np.full_like(ring, 1.1), color="#ffffff0a", lw=0.5, zorder=1)
-
-    # ── Stats in the centre ───────────────────────────────────────────────────
-    dist_km    = trackpoints[-1]["distance_m"] / 1000
-    total_kcal = int(sum(tp.get("kcal", 0.0) for tp in trackpoints))
-    moving     = speeds[speeds > 0]
-    avg_speed  = float(moving.mean()) if len(moving) else 0.0
-    pace_s     = 1000 / avg_speed if avg_speed > 0 else 0
-    pace_str   = f"{int(pace_s // 60)}:{int(pace_s % 60):02d}"
-    dur_h      = int(total_s // 3600)
-    dur_m      = int((total_s % 3600) // 60)
-    dur_str    = f"{dur_h:02d}:{dur_m:02d}" if dur_h else f"{dur_m} min"
-    date_str   = f"{start_time.day}. {start_time.strftime('%B %Y')}"
-
-    kw = dict(ha="center", transform=fig.transFigure, fontfamily="monospace")
-    fig.text(0.5, 0.578, f"{dist_km:.2f} km",  fontsize=26, color="#ffffff", weight="bold", **kw)
-    fig.text(0.5, 0.537, dur_str,               fontsize=16, color="#ccccee", **kw)
-    fig.text(0.5, 0.501, f"Ø {pace_str} /km",  fontsize=16, color="#ccccee", **kw)
-    fig.text(0.5, 0.465, f"{total_kcal} kcal",  fontsize=16, color="#ccccee", **kw)
-    fig.text(0.5, 0.413, date_str,               fontsize=11, color="#77778a", **kw)
-
-    # ── Speed legend (slow → fast label) ─────────────────────────────────────
-    slow_str = f"{int(min_speed * 3.6 * 10) / 10:.1f} km/h"
-    fast_str = f"{int(max_speed * 3.6 * 10) / 10:.1f} km/h"
-    fig.text(0.31, 0.07, f"◀ {slow_str}", fontsize=9, color="#666677",
-             ha="center", transform=fig.transFigure, fontfamily="monospace")
-    fig.text(0.69, 0.07, f"{fast_str} ▶", fontsize=9, color="#ffcc44",
-             ha="center", transform=fig.transFigure, fontfamily="monospace")
-
-    # Color gradient bar
-    grad_ax = fig.add_axes([0.33, 0.055, 0.34, 0.012])
-    grad_ax.imshow(np.linspace(0, 1, 256).reshape(1, -1), aspect="auto",
-                   cmap=cmap, origin="lower")
-    grad_ax.set_axis_off()
+    ax.scatter(xs[mask], ys[mask], c=colors[mask], s=7,
+               alpha=0.65, zorder=2, linewidths=0)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(output_path, dpi=150, facecolor=fig.get_facecolor(),
-                bbox_inches="tight", pad_inches=0.15)
+    fig.savefig(output_path, dpi=150, facecolor="black",
+                bbox_inches="tight", pad_inches=0)
     plt.close(fig)
 
 
-def try_render(start_time: datetime, trackpoints: list[dict],
-               fit_path: Path, cfg: dict) -> None:
-    """Render poster if enabled in config; log result, never raise."""
+def try_render(
+    start_time: datetime,
+    trackpoints: list[dict],
+    fit_path: Path,
+    cfg: dict,
+    garmin_activity_id: int | None = None,
+) -> None:
+    """Render poster and optionally attach it to the Garmin Connect activity."""
     if not cfg.get("visualize"):
         return
-    output_path = fit_path.with_suffix(".png")
+
+    png_path = fit_path.with_suffix(".png")
     try:
-        render(start_time, trackpoints, output_path)
-        print(f"  Poster: {output_path.name}")
+        render(start_time, trackpoints, png_path)
+        print(f"  Poster: {png_path.name}")
+    except ImportError as e:
+        print(f"  Visualization skipped: {e}")
+        return
     except Exception as e:
         print(f"  Visualization failed: {e}")
+        return
+
+    if garmin_activity_id is None:
+        return
+    try:
+        from garmin import attach_image
+        attach_image(garmin_activity_id, png_path, cfg)
+        print(f"  Garmin: poster attached to activity {garmin_activity_id}")
+    except Exception as e:
+        print(f"  Garmin poster upload failed: {e}")

@@ -66,8 +66,8 @@ def main():
         print(f"  Avg pace:  {int(avg_pace_min)}:{int((avg_pace_min % 1) * 60):02d} min/km")
         print(f"  Calories:  {total_kcal} kcal  (weight: {weight_kg:.0f} kg)")
         try_upload(fit_path, cfg)
-        try_upload_garmin(fit_path, cfg)
-        try_render(start_time, trackpoints, fit_path, cfg)
+        garmin_id = try_upload_garmin(fit_path, cfg, start_time)
+        try_render(start_time, trackpoints, fit_path, cfg, garmin_id)
         sys.exit(0)
 
     signal.signal(signal.SIGINT, finish)

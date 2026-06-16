@@ -14,6 +14,8 @@ Upload a file manually:
 """
 
 import sys
+import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 _TOKEN_STORE = Path(__file__).parent / "garmin_tokens"
@@ -43,20 +45,61 @@ def setup(cfg: dict) -> None:
     print(f"Garmin login successful. Session cached in {_TOKEN_STORE}")
 
 
-def upload_activity(filepath: Path, cfg: dict) -> None:
+def upload_activity(filepath: Path, cfg: dict, start_time: datetime | None = None) -> int | None:
+    """Upload FIT file to Garmin Connect. Returns the activity ID if start_time is given."""
     client = _client(cfg)
     client.upload_activity(str(filepath))
 
+    if start_time is None:
+        return None
 
-def try_upload(filepath: Path, cfg: dict) -> None:
-    """Upload to Garmin Connect if configured; log result, never raise."""
+    # Garmin processes uploads asynchronously; wait briefly then resolve activity ID
+    time.sleep(4)
+    target_ms = int(start_time.timestamp() * 1000)
+    for act in client.get_activities(0, 5):
+        begin_ms = act.get("beginTimestamp", 0)
+        if abs(begin_ms - target_ms) < 300_000:  # within 5 minutes
+            return act.get("activityId")
+    return None
+
+
+def attach_image(activity_id: int, image_path: Path, cfg: dict) -> None:
+    """Attach a JPEG image to an existing Garmin Connect activity."""
+    from PIL import Image
+    import io
+
+    client = _client(cfg)
+    img = Image.open(image_path).convert("RGB")
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", quality=92)
+    img_bytes = buf.getvalue()
+
+    boundary = "FlexiSpotPosterBoundary"
+    body = (
+        f"--{boundary}\r\nContent-Disposition: form-data; "
+        f'name="file"; filename="poster.jpg"\r\nContent-Type: image/jpeg\r\n\r\n'
+    ).encode() + img_bytes + f"\r\n--{boundary}--\r\n".encode()
+
+    client.client.post(
+        "connectapi",
+        f"/activity-service/activity/{activity_id}/image",
+        data=body,
+        headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+    )
+
+
+def try_upload(filepath: Path, cfg: dict, start_time: datetime | None = None) -> int | None:
+    """Upload to Garmin Connect if configured; return activity ID, never raise."""
     if not cfg.get("garmin", {}).get("auto_upload"):
-        return
+        return None
     try:
-        upload_activity(filepath, cfg)
-        print(f"  Garmin: uploaded — {filepath.name}")
+        activity_id = upload_activity(filepath, cfg, start_time)
+        print(f"  Garmin: uploaded — {filepath.name}"
+              + (f" (id {activity_id})" if activity_id else ""))
+        return activity_id
     except Exception as e:
         print(f"  Garmin upload failed: {e}")
+        return None
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
@@ -74,8 +117,9 @@ def _cli():
             sys.exit(1)
         cfg      = load_config()
         filepath = Path(sys.argv[2])
-        upload_activity(filepath, cfg)
-        print(f"Uploaded {filepath.name} to Garmin Connect.")
+        activity_id = upload_activity(filepath, cfg)
+        print(f"Uploaded {filepath.name} to Garmin Connect."
+              + (f" Activity ID: {activity_id}" if activity_id else ""))
 
     else:
         print("Usage: python3 garmin.py [setup | upload <file>]")

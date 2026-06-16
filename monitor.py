@@ -80,8 +80,8 @@ def save_session(start_time: datetime, trackpoints: list[dict], weight_kg: float
         f"Calories: {total_kcal} kcal"
     )
     try_upload(fit_path, cfg)
-    try_upload_garmin(fit_path, cfg)
-    try_render(start_time, trackpoints, fit_path, cfg)
+    garmin_id = try_upload_garmin(fit_path, cfg, start_time)
+    try_render(start_time, trackpoints, fit_path, cfg, garmin_id)
 
 
 def main():
