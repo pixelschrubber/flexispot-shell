@@ -19,6 +19,9 @@ session_state.json
 # Monitor log
 monitor.log
 
+# Downloaded assets (console image, DSEG7 font — fetched on first run)
+assets/
+
 # Python
 __pycache__/
 *.py[cod]

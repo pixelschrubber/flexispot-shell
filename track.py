@@ -23,6 +23,7 @@ from treadmill import (
 from strava import try_upload
 from garmin import try_upload as try_upload_garmin
 from visualize import try_render
+from display import try_render_display
 from heartrate import load_hr_monitor
 
 POLL_INTERVAL = 5
@@ -68,6 +69,7 @@ def main():
         try_upload(fit_path, cfg)
         garmin_id = try_upload_garmin(fit_path, cfg, start_time)
         try_render(start_time, trackpoints, fit_path, cfg, garmin_id)
+        try_render_display(start_time, trackpoints, fit_path, cfg)
         sys.exit(0)
 
     signal.signal(signal.SIGINT, finish)
