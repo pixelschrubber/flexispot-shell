@@ -11,7 +11,8 @@
   "garmin": {
     "email": "YOUR_GARMIN_EMAIL",
     "password": "YOUR_GARMIN_PASSWORD",
-    "auto_upload": true
+    "auto_upload": true,
+    "gear_uuid": ""
   },
   "visualize": true
 }

@@ -65,6 +65,15 @@ def upload_activity(filepath: Path, cfg: dict, start_time: datetime | None = Non
     return None
 
 
+def link_gear(activity_id: int, cfg: dict) -> None:
+    """Link the configured gear UUID to a Garmin Connect activity."""
+    gear_uuid = cfg.get("garmin", {}).get("gear_uuid", "").strip()
+    if not gear_uuid:
+        return
+    client = _client(cfg)
+    client.add_gear_to_activity(gear_uuid, activity_id)
+
+
 def attach_image(activity_id: int, image_path: Path, cfg: dict) -> None:
     """Attach a JPEG image to an existing Garmin Connect activity."""
     from PIL import Image
@@ -98,6 +107,8 @@ def try_upload(filepath: Path, cfg: dict, start_time: datetime | None = None) ->
         activity_id = upload_activity(filepath, cfg, start_time)
         print(f"  Garmin: uploaded — {filepath.name}"
               + (f" (id {activity_id})" if activity_id else ""))
+        if activity_id:
+            link_gear(activity_id, cfg)
         return activity_id
     except Exception as e:
         print(f"  Garmin upload failed: {e}")
