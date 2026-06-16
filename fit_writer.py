@@ -33,10 +33,11 @@ def _ts(dt: datetime) -> int:
     return max(0, int(dt.timestamp()) - _FIT_EPOCH)
 
 # FIT base type bytes
-_ENUM = 0x00   # 1 byte (used for enum fields)
-_U8   = 0x02   # 1 byte unsigned
-_U16  = 0x84   # 2 bytes unsigned LE
-_U32  = 0x86   # 4 bytes unsigned LE
+_ENUM   = 0x00   # 1 byte (used for enum fields)
+_U8     = 0x02   # 1 byte unsigned
+_STRING = 0x07   # N bytes, UTF-8
+_U16    = 0x84   # 2 bytes unsigned LE
+_U32    = 0x86   # 4 bytes unsigned LE
 
 def _def(local: int, global_num: int, fields: list) -> bytes:
     """Build a definition message. fields = [(field_num, byte_size, base_type), ...]"""
@@ -53,6 +54,7 @@ _LM_EVENT    = 1
 _LM_RECORD   = 2
 _LM_SESSION  = 3
 _LM_ACTIVITY = 4
+_LM_SPORT    = 5
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
@@ -80,6 +82,13 @@ def write_fit(start_time: datetime, trackpoints: list, output_path: Path) -> Non
     # type=4 (activity), manufacturer=255 (development), time_created
     buf += _def(_LM_FILE_ID, 0, [(0, 1, _ENUM), (1, 2, _U16), (4, 4, _U32)])
     buf += _dat(_LM_FILE_ID, "BHI", 4, 255, ts0)
+
+    # ── sport (global 12) ──────────────────────────────────────────────────────
+    # Garmin Connect's importer reads this (not just session.sport/sub_sport)
+    # to classify the activity type — without it, uploads are filed as "Other".
+    sport_name = b"Treadmill"
+    buf += _def(_LM_SPORT, 12, [(0, 1, _ENUM), (1, 1, _ENUM), (3, len(sport_name), _STRING)])
+    buf += _dat(_LM_SPORT, f"BB{len(sport_name)}s", 11, 1, sport_name)  # sport=walking, sub_sport=treadmill
 
     # ── event definition (global 21): timestamp, event, event_type ───────────
     buf += _def(_LM_EVENT, 21, [(253, 4, _U32), (0, 1, _ENUM), (1, 1, _ENUM)])
@@ -132,8 +141,8 @@ def write_fit(start_time: datetime, trackpoints: list, output_path: Path) -> Non
         (21,  2, _U16),   # max_power
         (0,   1, _ENUM),  # event (0=timer)
         (1,   1, _ENUM),  # event_type (1=stop)
-        (29,  1, _ENUM),  # sport (11=walking)
-        (30,  1, _ENUM),  # sub_sport (0=generic)
+        (5,   1, _ENUM),  # sport (11=walking)
+        (6,   1, _ENUM),  # sub_sport (1=treadmill)
     ])
     buf += _dat(_LM_SESSION, "IIIIIHHHHHBBBB",
         ts_last, ts0,
@@ -143,7 +152,7 @@ def write_fit(start_time: datetime, trackpoints: list, output_path: Path) -> Non
         0, 1,          # first_lap_index, num_laps
         avg_pwr, max_pwr,
         0, 1,          # event=timer, event_type=stop
-        11, 0,         # sport=walking, sub_sport=generic
+        11, 1,         # sport=walking, sub_sport=treadmill
     )
 
     # ── activity (global 34) ──────────────────────────────────────────────────

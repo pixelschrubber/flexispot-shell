@@ -7,5 +7,10 @@
     "client_id": "YOUR_CLIENT_ID",
     "client_secret": "YOUR_CLIENT_SECRET",
     "auto_upload": true
+  },
+  "garmin": {
+    "email": "YOUR_GARMIN_EMAIL",
+    "password": "YOUR_GARMIN_PASSWORD",
+    "auto_upload": true
   }
 }

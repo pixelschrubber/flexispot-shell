@@ -21,6 +21,7 @@ from treadmill import (
     save_activity,
 )
 from strava import try_upload
+from garmin import try_upload as try_upload_garmin
 from heartrate import load_hr_monitor
 
 POLL_INTERVAL = 5
@@ -63,8 +64,8 @@ def main():
         print(f"  Distance:  {dist_km:.2f} km")
         print(f"  Avg pace:  {int(avg_pace_min)}:{int((avg_pace_min % 1) * 60):02d} min/km")
         print(f"  Calories:  {total_kcal} kcal  (weight: {weight_kg:.0f} kg)")
-        print(f"\nGarmin Connect: connect.garmin.com → Activities → Import → {fit_path.name}")
         try_upload(fit_path, cfg)
+        try_upload_garmin(fit_path, cfg)
         sys.exit(0)
 
     signal.signal(signal.SIGINT, finish)

@@ -15,7 +15,8 @@ Shelly Plug (W)  →  calibration table  →  speed (km/h)  →  distance + cade
                                                                   ↓               ↓
                                                             FIT file          TCX file
                                                               ↓                  ↓
-                                                    Strava (auto-upload)   Garmin Connect
+                                                  Strava + Garmin Connect   (broad compatibility)
+                                                       (both auto-upload)
                                                               ↓
                                                         Apple Health (via Strava sync)
 ```
@@ -34,7 +35,7 @@ Shelly Plug (W)  →  calibration table  →  speed (km/h)  →  distance + cade
 
 ## Setup
 
-**No pip install needed** — only Python 3.9+ stdlib.
+**No pip install needed** for core tracking and Strava — only Python 3.9+ stdlib. Garmin auto-upload needs one extra package (see [Garmin Connect](#garmin-connect-automatic) below).
 
 ### 1. Clone and configure
 
@@ -122,11 +123,44 @@ python3 strava.py upload activities/treadmill_20250611_120000.fit
 
 Enable **Health** sync in the Strava iPhone app (`Settings → Health`). Strava will automatically write each uploaded workout to Apple Health — no extra steps needed.
 
-#### Garmin Connect (manual)
+#### Garmin Connect (automatic)
 
-1. Open [connect.garmin.com](https://connect.garmin.com)
-2. Click the cloud icon (top right) → **Import Data**
-3. Upload the `.fit` file from `activities/`
+Garmin has no public upload API for personal projects, so this logs in the same way the Garmin Connect app does, via the unofficial [`garminconnect`](https://pypi.org/project/garminconnect/) package — the one dependency that isn't stdlib:
+
+```bash
+pip3 install --user --break-system-packages garminconnect
+```
+
+Add the Garmin section to `config.json`:
+
+```json
+{
+  "shelly_ip": "192.168.1.xxx",
+  "user_weight_kg": 75.0,
+  "user_age": 35,
+  "garmin": {
+    "email": "you@example.com",
+    "password": "YOUR_PASSWORD",
+    "auto_upload": true
+  }
+}
+```
+
+Then log in once — this caches a session in `garmin_tokens/` (gitignored) so later runs don't need the password or a fresh login each time:
+
+```bash
+python3 garmin.py setup
+```
+
+If your account has MFA enabled, this first run will prompt for the code interactively.
+
+To upload a file manually:
+
+```bash
+python3 garmin.py upload activities/treadmill_20250611_120000.fit
+```
+
+**Manual upload** (no setup needed): open [connect.garmin.com](https://connect.garmin.com) → cloud icon (top right) → **Import Data** → upload the `.fit` file from `activities/`.
 
 ---
 
@@ -183,6 +217,7 @@ The menu bar shows `🟢 00:23:14  1.16km  68kcal` while the treadmill is runnin
 | `treadmill.py` | Shared library: Shelly API, calibration, physics, file export |
 | `fit_writer.py` | Pure-Python FIT file writer (no external dependencies) |
 | `strava.py` | Strava OAuth setup and activity upload |
+| `garmin.py` | Garmin Connect login and activity upload |
 | `calibrate.py` | One-time calibration wizard |
 | `track.py` | Manual terminal tracker |
 | `monitor.py` | Automatic background monitor |
