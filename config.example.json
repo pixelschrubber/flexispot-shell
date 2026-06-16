@@ -12,5 +12,6 @@
     "email": "YOUR_GARMIN_EMAIL",
     "password": "YOUR_GARMIN_PASSWORD",
     "auto_upload": true
-  }
+  },
+  "visualize": true
 }
