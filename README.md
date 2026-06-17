@@ -210,6 +210,62 @@ The menu bar shows `🟢 00:23:14  1.16km  68kcal` while the treadmill is runnin
 
 ---
 
+## Gamification
+
+`stats.py` tracks cumulative session data locally and adds three motivational layers on top of the raw workout data.
+
+### Streaks
+
+A streak counts consecutive calendar days with at least one session. The background monitor fires a macOS notification at 3, 7, 14, 30, 60, and 100 days.
+
+### Weekly goal & trend
+
+Configure a weekly distance target in `config.json`:
+
+```json
+"gamification": {
+  "weekly_goal_km": 20
+}
+```
+
+The xbar menu bar plugin shows this week's progress against the goal and a percentage trend vs. the previous week (green ↑ / red ↓).
+
+### Virtual journey
+
+Map your cumulative distance onto a real-world route:
+
+```json
+"gamification": {
+  "weekly_goal_km": 20,
+  "virtual_journey": {
+    "name": "Hamburg → München",
+    "total_km": 780
+  }
+}
+```
+
+The xbar idle view shows a progress bar and your current position along the route:
+
+```
+🔥 Streak: 4 Tage
+📅 Diese Woche: 8.3 / 20 km  ↑23%
+🗺️ Hamburg → München: 234 / 780 km  ████████░░  30%
+```
+
+Milestones (10 / 25 / 50 / 100 / 200 / 500 / 1000 km total) also trigger macOS notifications.
+
+### First-time setup
+
+Stats are accumulated automatically after each session via the background monitor. If you have existing sessions in `activities/`, import them once:
+
+```bash
+python3 stats.py
+```
+
+This scans all TCX files and writes `gamification_stats.json` (gitignored).
+
+---
+
 ## File overview
 
 | File | Purpose |
@@ -218,6 +274,7 @@ The menu bar shows `🟢 00:23:14  1.16km  68kcal` while the treadmill is runnin
 | `fit_writer.py` | Pure-Python FIT file writer (no external dependencies) |
 | `strava.py` | Strava OAuth setup and activity upload |
 | `garmin.py` | Garmin Connect login and activity upload |
+| `stats.py` | Gamification: streaks, weekly goals, virtual journeys, notifications |
 | `calibrate.py` | One-time calibration wizard |
 | `track.py` | Manual terminal tracker |
 | `monitor.py` | Automatic background monitor |
