@@ -145,6 +145,43 @@ def main():
         print("---")
         print(f"Power: {power:.1f}W  (idle: {idle_power:.1f}W)")
         print(f"Threshold: >{idle_power + start_thresh:.1f}W to start")
+
+        # ── Gamification ─────────────────────────────────────────────────────
+        try:
+            import stats as st
+            gstats   = st.load_stats()
+            streak   = st.get_streak(gstats)
+            week_km  = st.get_week_km(gstats)
+            delta    = st.week_delta_pct(gstats)
+            goal_km  = cfg.get("gamification", {}).get("weekly_goal_km")
+
+            print("---")
+
+            if streak > 0:
+                tag = "Tag" if streak == 1 else "Tage"
+                print(f"🔥 Streak: {streak} {tag} | color=orange")
+
+            if goal_km:
+                week_line = f"📅 Diese Woche: {week_km:.1f} / {goal_km} km"
+            else:
+                week_line = f"📅 Diese Woche: {week_km:.1f} km"
+            if delta is not None:
+                sign  = "↑" if delta >= 0 else "↓"
+                color = "green" if delta >= 0 else "red"
+                print(f"{week_line}  {sign}{abs(delta):.0f}% | color={color}")
+            else:
+                print(week_line)
+
+            journey = st.journey_progress(gstats, cfg)
+            if journey:
+                name, done, total = journey
+                bar = st.progress_bar(done, total)
+                pct = done / total * 100
+                print(f"🗺️ {name}: {done:.0f} / {total:.0f} km  {bar}  {pct:.0f}% | color=blue")
+        except Exception:
+            pass
+        # ─────────────────────────────────────────────────────────────────────
+
         print("---")
         activities = sorted(OUTPUT_DIR.glob("*.tcx")) if OUTPUT_DIR.exists() else []
         if activities:

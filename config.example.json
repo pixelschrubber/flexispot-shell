@@ -14,5 +14,12 @@
     "auto_upload": true,
     "gear_uuid": ""
   },
-  "visualize": true
+  "visualize": true,
+  "gamification": {
+    "weekly_goal_km": 20,
+    "virtual_journey": {
+      "name": "Hamburg → München",
+      "total_km": 780
+    }
+  }
 }

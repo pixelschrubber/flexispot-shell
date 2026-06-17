@@ -16,6 +16,9 @@ activities/
 # xbar session state
 session_state.json
 
+# Gamification stats (personal data, rebuilt from activities/)
+gamification_stats.json
+
 # Monitor log
 monitor.log
 

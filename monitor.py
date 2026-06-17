@@ -32,6 +32,7 @@ from garmin import try_upload as try_upload_garmin
 from visualize import try_render
 from display import try_render_display
 from heartrate import load_hr_monitor
+import stats as st
 
 LOG_FILE = Path(__file__).parent / "monitor.log"
 
@@ -84,6 +85,9 @@ def save_session(start_time: datetime, trackpoints: list[dict], weight_kg: float
     garmin_id = try_upload_garmin(fit_path, cfg, start_time)
     try_render(start_time, trackpoints, fit_path, cfg, garmin_id)
     try_render_display(start_time, trackpoints, fit_path, cfg)
+
+    updated = st.record_session(dist_km, duration, total_kcal)
+    st.check_milestones(updated, dist_km)
 
 
 def main():
