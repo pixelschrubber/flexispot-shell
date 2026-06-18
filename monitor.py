@@ -24,6 +24,7 @@ from treadmill import (
     load_calibration,
     load_config,
     load_start_threshold,
+    metabolic_power_w,
     power_to_speed,
     save_activity,
 )
@@ -173,7 +174,7 @@ def main():
                 "time":       now,
                 "distance_m": total_distance_m,
                 "speed_ms":   speed_ms,
-                "power_w":    smooth_power,
+                "power_w":    metabolic_power_w(speed_kmh, weight_kg),
                 "kcal":       interval_kcal,
             }
             if hr:

@@ -82,6 +82,11 @@ def kcal_for_interval(speed_kmh: float, dt_seconds: float, weight_kg: float) -> 
     return speed_to_met(speed_kmh) * weight_kg * (dt_seconds / 3600.0)
 
 
+def metabolic_power_w(speed_kmh: float, weight_kg: float) -> float:
+    """Metabolic power in watts: MET × weight [kcal/h] converted to W."""
+    return speed_to_met(speed_kmh) * weight_kg * (4184 / 3600)
+
+
 def speed_to_cadence(speed_kmh: float) -> int:
     """Estimated walking cadence in strides/min (= steps/min ÷ 2).
     Linear model from walking biomechanics literature; ±10% accuracy."""

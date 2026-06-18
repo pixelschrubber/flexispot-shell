@@ -160,7 +160,7 @@ def main():
         except Exception:
             pass
     else:
-        print(f"🏃 ready | color={FG}")
+        print("🏃 ready")
         print("---")
         print(f"Power: {power:.1f}W  (idle: {idle_power:.1f}W) | color={FG}")
         print(f"Threshold: >{idle_power + start_thresh:.1f}W to start | color={FG}")
