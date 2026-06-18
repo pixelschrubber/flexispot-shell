@@ -15,10 +15,13 @@ Upload a file manually:
     python3 garmin.py upload activities/treadmill_20250611_123000.fit
 """
 
+import logging
 import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+
+log = logging.getLogger(__name__)
 
 _TOKEN_STORE = Path(__file__).parent / "garmin_tokens"
 
@@ -105,13 +108,13 @@ def try_upload(filepath: Path, cfg: dict, start_time: datetime | None = None) ->
         return None
     try:
         activity_id = upload_activity(filepath, cfg, start_time)
-        print(f"  Garmin: uploaded — {filepath.name}"
-              + (f" (id {activity_id})" if activity_id else ""))
+        log.info("Garmin: uploaded — %s%s", filepath.name,
+                 f" (id {activity_id})" if activity_id else "")
         if activity_id:
             link_gear(activity_id, cfg)
         return activity_id
     except Exception as e:
-        print(f"  Garmin upload failed: {e}")
+        log.error("Garmin upload failed: %s", e)
         return None
 
 
