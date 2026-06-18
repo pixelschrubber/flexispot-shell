@@ -3,6 +3,7 @@
 # <xbar.version>1.0</xbar.version>
 # <xbar.author>Ulf Mayer</xbar.author>
 # <xbar.desc>Live treadmill stats via Shelly Plug in the macOS menu bar</xbar.desc>
+# <xbar.aboutURL>https://harder-better-faster-stronger.de/?flexispot</xbar.aboutURL>
 # <xbar.refreshTime>5s</xbar.refreshTime>
 #
 # Setup:
@@ -18,6 +19,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import json
+import subprocess
 import time
 from treadmill import (
     get_power,
@@ -31,6 +33,12 @@ from treadmill import (
 )
 
 STATE_FILE     = Path(__file__).resolve().parent / "session_state.json"
+
+_dark = subprocess.run(
+    ["defaults", "read", "-g", "AppleInterfaceStyle"],
+    capture_output=True, text=True
+).returncode == 0
+FG = "white" if _dark else "black"
 STOP_DELAY_S  = 60
 MIN_SESSION_S = 60
 
@@ -132,19 +140,30 @@ def main():
         speed_str = f"{speed_kmh:.1f} km/h" if speed_kmh >= 0.1 else "–"
         print(f"{indicator} {speed_str}")
         print("---")
-        print(f"🕐 Time:      {fmt_duration(elapsed)}")
-        print(f"🏃 Speed:     {speed_kmh:.1f} km/h  ({power:.0f}W)")
-        print(f"📏 Distance:  {dist_km:.2f} km")
-        print(f"🔥 Calories:  {int(kcal)} kcal")
-        print(f"⏱ Pace:      {pace_str(speed_kmh)}")
+        print(f"🕐 Time:      {fmt_duration(elapsed)} | color={FG}")
+        print(f"🏃 Speed:     {speed_kmh:.1f} km/h  ({power:.0f}W) | color={FG}")
+        print(f"📏 Distance:  {dist_km:.2f} km | color={FG}")
+        print(f"🔥 Calories:  {int(kcal)} kcal | color={FG}")
+        print(f"⏱ Pace:      {pace_str(speed_kmh)} | color={FG}")
         if status == "stopping":
             remain = max(0, STOP_DELAY_S - (now - (state.get("stop_ts") or now)))
             print(f"⏳ Ends in:   {int(remain)}s | color=orange")
+
+        try:
+            import stats as st
+            gstats = st.load_stats()
+            streak = st.get_streak(gstats)
+            if streak > 0:
+                tag = "Tag" if streak == 1 else "Tage"
+                print("---")
+                print(f"🔥 Streak: {streak} {tag} | color={FG}")
+        except Exception:
+            pass
     else:
-        print("🏃 ready")
+        print(f"🏃 ready | color={FG}")
         print("---")
-        print(f"Power: {power:.1f}W  (idle: {idle_power:.1f}W)")
-        print(f"Threshold: >{idle_power + start_thresh:.1f}W to start")
+        print(f"Power: {power:.1f}W  (idle: {idle_power:.1f}W) | color={FG}")
+        print(f"Threshold: >{idle_power + start_thresh:.1f}W to start | color={FG}")
 
         # ── Gamification ─────────────────────────────────────────────────────
         try:
@@ -159,7 +178,7 @@ def main():
 
             if streak > 0:
                 tag = "Tag" if streak == 1 else "Tage"
-                print(f"🔥 Streak: {streak} {tag} | color=orange")
+                print(f"🔥 Streak: {streak} {tag} | color={FG}")
 
             if goal_km:
                 week_line = f"📅 Diese Woche: {week_km:.1f} / {goal_km} km"
@@ -170,7 +189,7 @@ def main():
                 color = "green" if delta >= 0 else "red"
                 print(f"{week_line}  {sign}{abs(delta):.0f}% | color={color}")
             else:
-                print(week_line)
+                print(f"{week_line} | color={FG}")
 
             journey = st.journey_progress(gstats, cfg)
             if journey:
@@ -185,7 +204,8 @@ def main():
         print("---")
         activities = sorted(OUTPUT_DIR.glob("*.tcx")) if OUTPUT_DIR.exists() else []
         if activities:
-            print(f"Last session: {activities[-1].name} | color=gray")
+            print(f"Last session: {activities[-1].name} | color={FG}")
+
 
 
 if __name__ == "__main__":
