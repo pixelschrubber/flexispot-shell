@@ -38,7 +38,7 @@ _dark = subprocess.run(
     ["defaults", "read", "-g", "AppleInterfaceStyle"],
     capture_output=True, text=True
 ).returncode == 0
-FG = "white" if _dark else "black"
+FG = "#ffffff" if _dark else "#000000"
 STOP_DELAY_S  = 60
 MIN_SESSION_S = 60
 
@@ -127,7 +127,7 @@ def main():
     if not shelly_ok:
         print("🏃 –")
         print("---")
-        print("Shelly unreachable | color=red")
+        print("Shelly unreachable | color=#b30000")
         return
 
     if status in ("active", "stopping"):
@@ -147,7 +147,7 @@ def main():
         print(f"⏱ Pace:      {pace_str(speed_kmh)} | color={FG}")
         if status == "stopping":
             remain = max(0, STOP_DELAY_S - (now - (state.get("stop_ts") or now)))
-            print(f"⏳ Ends in:   {int(remain)}s | color=orange")
+            print(f"⏳ Ends in:   {int(remain)}s | color=#c06000")
 
         try:
             import stats as st
@@ -186,7 +186,7 @@ def main():
                 week_line = f"📅 Diese Woche: {week_km:.1f} km"
             if delta is not None:
                 sign  = "↑" if delta >= 0 else "↓"
-                color = "green" if delta >= 0 else "red"
+                color = "#1a7a1a" if delta >= 0 else "#b30000"
                 print(f"{week_line}  {sign}{abs(delta):.0f}% | color={color}")
             else:
                 print(f"{week_line} | color={FG}")
@@ -196,7 +196,7 @@ def main():
                 name, done, total = journey
                 bar = st.progress_bar(done, total)
                 pct = done / total * 100
-                print(f"🗺️ {name}: {done:.0f} / {total:.0f} km  {bar}  {pct:.0f}% | color=blue")
+                print(f"🗺️ {name}: {done:.0f} / {total:.0f} km  {bar}  {pct:.0f}% | color=#0044cc")
         except Exception:
             pass
         # ─────────────────────────────────────────────────────────────────────
