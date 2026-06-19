@@ -16,10 +16,13 @@ Upload a file manually:
 """
 
 import logging
+import socket
 import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+
+_TIMEOUT_S = 30  # max seconds for any Garmin HTTP call
 
 log = logging.getLogger(__name__)
 
@@ -106,6 +109,8 @@ def try_upload(filepath: Path, cfg: dict, start_time: datetime | None = None) ->
     """Upload to Garmin Connect if configured; return activity ID, never raise."""
     if not cfg.get("garmin", {}).get("auto_upload"):
         return None
+    prev_timeout = socket.getdefaulttimeout()
+    socket.setdefaulttimeout(_TIMEOUT_S)
     try:
         activity_id = upload_activity(filepath, cfg, start_time)
         log.info("Garmin: uploaded — %s%s", filepath.name,
@@ -116,6 +121,8 @@ def try_upload(filepath: Path, cfg: dict, start_time: datetime | None = None) ->
     except Exception as e:
         log.error("Garmin upload failed: %s", e)
         return None
+    finally:
+        socket.setdefaulttimeout(prev_timeout)
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
