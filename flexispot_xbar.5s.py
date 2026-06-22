@@ -168,7 +168,7 @@ def main():
             gstats = st.load_stats()
             streak = st.get_streak(gstats)
             if streak > 0:
-                tag = "Tag" if streak == 1 else "Tage"
+                tag = "Woche" if streak == 1 else "Wochen"
                 print("---")
                 print(f"🔥 Streak: {streak} {tag} | color={FG}")
         except Exception:
@@ -191,7 +191,7 @@ def main():
             print("---")
 
             if streak > 0:
-                tag = "Tag" if streak == 1 else "Tage"
+                tag = "Woche" if streak == 1 else "Wochen"
                 print(f"🔥 Streak: {streak} {tag} | color={FG}")
 
             if goal_km:

@@ -78,14 +78,24 @@ def record_session(dist_km: float, duration_s: float, kcal: int) -> dict:
 
 
 def get_streak(stats: dict) -> int:
-    """Consecutive days ending today (or yesterday) with at least one session."""
-    days  = {s["date"] for s in stats.get("sessions", [])}
-    today = date.today()
-    check = today if today.isoformat() in days else today - timedelta(days=1)
+    """Consecutive calendar weeks with at least one session.
+
+    Grace: if the current week has no session yet it is not counted, but
+    the streak is not broken either — last week is checked first.
+    """
+    active_weeks = {
+        date.fromisoformat(s["date"]).isocalendar()[:2]
+        for s in stats.get("sessions", [])
+    }
+    today   = date.today()
+    monday  = today - timedelta(days=today.weekday())
+    # Start from current week if active, otherwise from last week
+    if today.isocalendar()[:2] not in active_weeks:
+        monday -= timedelta(weeks=1)
     n = 0
-    while check.isoformat() in days:
+    while monday.isocalendar()[:2] in active_weeks:
         n += 1
-        check -= timedelta(days=1)
+        monday -= timedelta(weeks=1)
     return n
 
 
@@ -140,8 +150,8 @@ def notify(title: str, message: str) -> None:
 def check_milestones(stats: dict, new_dist_km: float) -> None:
     """Fire macOS notifications for streak and cumulative distance milestones."""
     streak = get_streak(stats)
-    if streak in (3, 7, 14, 30, 60, 100):
-        notify("🔥 Streak!", f"{streak} Tage in Folge auf dem Laufband!")
+    if streak in (2, 4, 8, 13, 26, 52):
+        notify("🔥 Streak!", f"{streak} Wochen in Folge auf dem Laufband!")
 
     total = get_total_km(stats)
     prev  = total - new_dist_km
@@ -156,6 +166,6 @@ if __name__ == "__main__":
     sessions = stats.get("sessions", [])
     print(f"Rebuilt stats from {len(sessions)} sessions")
     print(f"Gesamtdistanz: {get_total_km(stats):.1f} km")
-    print(f"Streak:        {get_streak(stats)} Tage")
+    print(f"Streak:        {get_streak(stats)} Wochen")
     print(f"Diese Woche:   {get_week_km(stats):.1f} km")
     print(f"Letzte Woche:  {get_week_km(stats, 1):.1f} km")
