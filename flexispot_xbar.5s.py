@@ -22,7 +22,8 @@ import json
 import subprocess
 import time
 from treadmill import (
-    get_power,
+    get_shelly_status,
+    set_shelly_power,
     load_calibration,
     load_config,
     load_start_threshold,
@@ -33,6 +34,7 @@ from treadmill import (
 )
 
 STATE_FILE     = Path(__file__).resolve().parent / "session_state.json"
+SCRIPT_PATH    = str(Path(__file__).resolve())
 
 _dark = subprocess.run(
     ["defaults", "read", "-g", "AppleInterfaceStyle"],
@@ -82,13 +84,16 @@ def main():
     state = load_state()
 
     try:
-        power     = get_power(shelly_ip)
+        shelly_st = get_shelly_status(shelly_ip)
+        power     = shelly_st["apower"]
+        shelly_on = shelly_st["output"]
         shelly_ok = True
     except Exception:
         shelly_ok = False
+        shelly_on = False
         power     = 0.0
 
-    active    = shelly_ok and power > idle_power + start_thresh
+    active    = shelly_ok and shelly_on and power > idle_power + start_thresh
     speed_kmh = power_to_speed(power, idle_power, cal_pts) if active else 0.0
     speed_ms  = speed_kmh / 3.6
     status    = state.get("status", "idle")
@@ -124,10 +129,19 @@ def main():
 
     # ── xbar output ──────────────────────────────────────────────────────────
 
+    PY = sys.executable
+
     if not shelly_ok:
         print("🏃 –")
         print("---")
-        print("Shelly unreachable | color=#b30000")
+        print("Shelly nicht erreichbar | color=#b30000")
+        return
+
+    if not shelly_on:
+        print("🔌 –")
+        print("---")
+        print(f"Shelly: Aus | color=#888888")
+        print(f"Shelly einschalten | bash={PY} param1={SCRIPT_PATH} param2=shelly-on terminal=false refresh=true")
         return
 
     if status in ("active", "stopping"):
@@ -202,6 +216,8 @@ def main():
         # ─────────────────────────────────────────────────────────────────────
 
         print("---")
+        print(f"Shelly ausschalten | bash={PY} param1={SCRIPT_PATH} param2=shelly-off terminal=false refresh=true")
+        print("---")
         activities = sorted(OUTPUT_DIR.glob("*.tcx")) if OUTPUT_DIR.exists() else []
         if activities:
             print(f"Last session: {activities[-1].name} | color={FG}")
@@ -209,4 +225,10 @@ def main():
 
 
 if __name__ == "__main__":
+    if len(sys.argv) > 1:
+        cmd = sys.argv[1]
+        if cmd in ("shelly-on", "shelly-off"):
+            cfg = load_config()
+            set_shelly_power(cfg["shelly_ip"], cmd == "shelly-on")
+            sys.exit(0)
     main()

@@ -20,10 +20,23 @@ def load_config() -> dict:
     return json.loads(CONFIG_FILE.read_text())
 
 
-def get_power(shelly_ip: str) -> float:
+def get_shelly_status(shelly_ip: str) -> dict:
+    """Returns Switch.GetStatus dict with at least 'apower' and 'output' keys."""
     url = f"http://{shelly_ip}/rpc/Switch.GetStatus?id=0"
     with urllib.request.urlopen(url, timeout=5) as resp:
-        return json.loads(resp.read())["apower"]
+        return json.loads(resp.read())
+
+
+def get_power(shelly_ip: str) -> float:
+    return get_shelly_status(shelly_ip)["apower"]
+
+
+def set_shelly_power(shelly_ip: str, on: bool) -> None:
+    """Turn the Shelly switch on or off."""
+    val = "true" if on else "false"
+    url = f"http://{shelly_ip}/rpc/Switch.Set?id=0&on={val}"
+    with urllib.request.urlopen(url, timeout=5) as resp:
+        resp.read()
 
 
 def load_calibration() -> tuple[float, list[tuple[float, float]]]:
