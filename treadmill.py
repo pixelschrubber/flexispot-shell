@@ -96,8 +96,15 @@ def kcal_for_interval(speed_kmh: float, dt_seconds: float, weight_kg: float) -> 
 
 
 def metabolic_power_w(speed_kmh: float, weight_kg: float) -> float:
-    """Metabolic power in watts: MET × weight [kcal/h] converted to W."""
-    return speed_to_met(speed_kmh) * weight_kg * (4184 / 3600)
+    """Net metabolic power in watts: (MET − 1) × weight × 4184/3600.
+
+    Subtracts the resting metabolic rate (MET = 1) so the value represents
+    the extra energy cost of movement rather than total metabolism.  At rest
+    this returns 0 W; at typical desk-treadmill pace (~1.6 km/h, MET 2.1)
+    it returns ~107 W for an 84 kg person — consistent with the range that
+    Garmin Running Power accessories (Stryd, HRM-Pro) report for slow walking.
+    """
+    return max(0.0, speed_to_met(speed_kmh) - 1.0) * weight_kg * (4184 / 3600)
 
 
 def speed_to_cadence(speed_kmh: float) -> int:

@@ -216,7 +216,7 @@ The menu bar shows `🟢 00:23:14  1.16km  68kcal` while the treadmill is runnin
 
 ### Streaks
 
-A streak counts consecutive calendar days with at least one session. The background monitor fires a macOS notification at 3, 7, 14, 30, 60, and 100 days.
+A streak counts consecutive calendar **weeks** with at least one session — daily streaks break over weekends when you're away from the desk, weekly ones don't. If the current week has no session yet it is not counted, but the streak is not broken either (grace period until the week ends). The background monitor fires a macOS notification at 2, 4, 8, 13, 26, and 52 weeks.
 
 ### Weekly goal & trend
 
@@ -247,7 +247,7 @@ Map your cumulative distance onto a real-world route:
 The xbar idle view shows a progress bar and your current position along the route:
 
 ```
-🔥 Streak: 4 Tage
+🔥 Streak: 4 Wochen
 📅 Diese Woche: 8.3 / 20 km  ↑23%
 🗺️ Hamburg → München: 234 / 780 km  ████████░░  30%
 ```
@@ -292,11 +292,11 @@ This scans all TCX files and writes `gamification_stats.json` (gitignored).
 | Timestamp | System clock |
 | Distance (m) | Integrated from speed × Δt |
 | Speed (m/s) | Interpolated from calibration table |
-| Power (W) | Shelly Plug — electrical draw of the treadmill motor |
+| Power (W) | Net metabolic power: (MET − 1) × weight × 4184/3600 |
 | Cadence (strides/min) | Estimated from speed: `(87 + 4.8 × km/h) ÷ 2` |
 | Calories | MET × weight × hours (Ainsworth et al.) |
 
-Cadence is a biomechanical estimate (±10%). Power reflects the treadmill's electrical consumption, not metabolic running power — values are in a similar range for walking (50–150 W) but represent different things.
+Cadence is a biomechanical estimate (±10%). Power is **net metabolic power** — the extra energy cost of movement above the resting metabolic rate. Subtracting the resting rate (MET = 1) makes the value start at 0 W when standing still and rise with speed, keeping it in the same range as what Garmin Running Power accessories (Stryd, HRM-Pro) report: roughly 80–120 W for slow desk-treadmill walking (~1.5–2 km/h) up to 250–350 W at brisk walking pace (4–5 km/h). The Shelly's electrical reading is used only for speed inference, not written to the activity file.
 
 ---
 
