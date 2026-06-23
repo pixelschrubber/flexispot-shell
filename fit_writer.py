@@ -75,6 +75,9 @@ def write_fit(start_time: datetime, trackpoints: list, output_path: Path) -> Non
     powers   = [tp.get("power_w", 0.0) for tp in trackpoints if tp.get("power_w", 0.0) > 0]
     avg_pwr  = min(0xFFFF, int(sum(powers) / len(powers))) if powers else 0
     max_pwr  = min(0xFFFF, int(max(powers))) if powers else 0
+    hrs      = [int(tp["heart_rate"]) for tp in trackpoints if tp.get("heart_rate", 0) > 0]
+    avg_hr   = min(0xFE, int(sum(hrs) / len(hrs))) if hrs else 0
+    max_hr   = min(0xFE, max(hrs)) if hrs else 0
 
     buf = bytearray()
 
@@ -143,8 +146,10 @@ def write_fit(start_time: datetime, trackpoints: list, output_path: Path) -> Non
         (1,   1, _ENUM),  # event_type (1=stop)
         (5,   1, _ENUM),  # sport (11=walking)
         (6,   1, _ENUM),  # sub_sport (1=treadmill)
+        (17,  1, _U8),    # max_heart_rate: bpm
+        (18,  1, _U8),    # avg_heart_rate: bpm
     ])
-    buf += _dat(_LM_SESSION, "IIIIIHHHHHBBBB",
+    buf += _dat(_LM_SESSION, "IIIIIHHHHHBBBBBB",
         ts_last, ts0,
         dur_ms, dur_ms,
         dist_cm,
@@ -153,6 +158,7 @@ def write_fit(start_time: datetime, trackpoints: list, output_path: Path) -> Non
         avg_pwr, max_pwr,
         0, 1,          # event=timer, event_type=stop
         11, 1,         # sport=walking, sub_sport=treadmill
+        max_hr, avg_hr,
     )
 
     # ── activity (global 34) ──────────────────────────────────────────────────

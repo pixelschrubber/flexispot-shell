@@ -6,7 +6,8 @@
   "strava": {
     "client_id": "YOUR_CLIENT_ID",
     "client_secret": "YOUR_CLIENT_SECRET",
-    "auto_upload": true
+    "auto_upload": true,
+    "gear_id": ""
   },
   "garmin": {
     "email": "YOUR_GARMIN_EMAIL",

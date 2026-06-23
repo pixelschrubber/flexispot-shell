@@ -18,12 +18,14 @@ import urllib.request
 import webbrowser
 from pathlib import Path
 
-_TOKENS_FILE   = Path(__file__).parent / "strava_tokens.json"
-_AUTH_URL      = "https://www.strava.com/oauth/authorize"
-_TOKEN_URL     = "https://www.strava.com/api/v3/oauth/token"
-_UPLOAD_URL    = "https://www.strava.com/api/v3/uploads"
-_REDIRECT_URI  = "http://localhost:8765/callback"
-_SCOPE         = "activity:write"
+_TOKENS_FILE    = Path(__file__).parent / "strava_tokens.json"
+_AUTH_URL       = "https://www.strava.com/oauth/authorize"
+_TOKEN_URL      = "https://www.strava.com/api/v3/oauth/token"
+_UPLOAD_URL     = "https://www.strava.com/api/v3/uploads"
+_UPLOAD_STATUS  = "https://www.strava.com/api/v3/uploads/{}"
+_ACTIVITY_URL   = "https://www.strava.com/api/v3/activities/{}"
+_REDIRECT_URI   = "http://localhost:8765/callback"
+_SCOPE          = "activity:write"
 
 
 # ── OAuth ─────────────────────────────────────────────────────────────────────
@@ -104,7 +106,16 @@ def _get_access_token(cfg: dict) -> str:
 
 # ── Upload ────────────────────────────────────────────────────────────────────
 
-def upload_activity(filepath: Path, cfg: dict, name: str = "") -> dict:
+def _api(token: str, url: str, method: str = "GET", data: bytes | None = None,
+         headers: dict | None = None) -> dict:
+    req = urllib.request.Request(url, data=data, method=method,
+                                 headers={"Authorization": f"Bearer {token}", **(headers or {})})
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        return json.loads(resp.read())
+
+
+def upload_activity(filepath: Path, cfg: dict, name: str = "",
+                    description: str = "") -> dict:
     """Upload a .fit or .tcx file to Strava. Returns the upload response dict."""
     token     = _get_access_token(cfg)
     suffix    = filepath.suffix.lower()
@@ -114,10 +125,10 @@ def upload_activity(filepath: Path, cfg: dict, name: str = "") -> dict:
     boundary  = "FlexiSpotUploadBoundary"
     file_data = filepath.read_bytes()
 
-    def _field(name: str, value: str) -> bytes:
+    def _field(fname: str, value: str) -> bytes:
         return (
             f"--{boundary}\r\n"
-            f'Content-Disposition: form-data; name="{name}"\r\n\r\n'
+            f'Content-Disposition: form-data; name="{fname}"\r\n\r\n'
             f"{value}\r\n"
         ).encode()
 
@@ -126,6 +137,7 @@ def upload_activity(filepath: Path, cfg: dict, name: str = "") -> dict:
         + _field("name",       activity_name)
         + _field("sport_type", "Walk")
         + _field("trainer",    "1")
+        + (_field("description", description) if description else b"")
         + (
             f"--{boundary}\r\n"
             f'Content-Disposition: form-data; name="file"; filename="{filepath.name}"\r\n'
@@ -135,27 +147,50 @@ def upload_activity(filepath: Path, cfg: dict, name: str = "") -> dict:
         + f"\r\n--{boundary}--\r\n".encode()
     )
 
-    req = urllib.request.Request(
-        _UPLOAD_URL,
-        data=body,
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Content-Type":  f"multipart/form-data; boundary={boundary}",
-        },
-        method="POST",
-    )
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        return json.loads(resp.read())
+    result = _api(token, _UPLOAD_URL, method="POST", data=body,
+                  headers={"Content-Type": f"multipart/form-data; boundary={boundary}"})
+
+    gear_id = cfg.get("strava", {}).get("gear_id", "").strip()
+    if gear_id:
+        activity_id = _wait_for_activity(token, result.get("id"))
+        if activity_id:
+            result["activity_id"] = activity_id
+            _set_gear(token, activity_id, gear_id)
+
+    return result
 
 
-def try_upload(filepath: Path, cfg: dict, name: str = "") -> None:
+def _wait_for_activity(token: str, upload_id: int | None, retries: int = 10) -> int | None:
+    """Poll the upload status endpoint until Strava assigns an activity ID."""
+    if not upload_id:
+        return None
+    for _ in range(retries):
+        time.sleep(3)
+        status = _api(token, _UPLOAD_STATUS.format(upload_id))
+        if status.get("activity_id"):
+            return status["activity_id"]
+        if status.get("error"):
+            return None
+    return None
+
+
+def _set_gear(token: str, activity_id: int, gear_id: str) -> None:
+    """Attach a gear item to an existing Strava activity."""
+    data = urllib.parse.urlencode({"gear_id": gear_id}).encode()
+    _api(token, _ACTIVITY_URL.format(activity_id), method="PUT",
+         headers={"Content-Type": "application/x-www-form-urlencoded"}, data=data)
+
+
+def try_upload(filepath: Path, cfg: dict, name: str = "",
+               description: str = "") -> None:
     """Upload to Strava if configured; log result, never raise."""
     if not cfg.get("strava", {}).get("auto_upload"):
         return
     try:
-        result = upload_activity(filepath, cfg, name)
+        result = upload_activity(filepath, cfg, name, description)
         status = result.get("status", "")
-        print(f"  Strava: uploaded — {status}  (id {result.get('id')})")
+        act_id = result.get("activity_id") or result.get("id")
+        print(f"  Strava: uploaded — {status}  (id {act_id})")
     except Exception as e:
         print(f"  Strava upload failed: {e}")
 

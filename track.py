@@ -66,7 +66,18 @@ def main():
         print(f"  Distance:  {dist_km:.2f} km")
         print(f"  Avg pace:  {int(avg_pace_min)}:{int((avg_pace_min % 1) * 60):02d} min/km")
         print(f"  Calories:  {total_kcal} kcal  (weight: {weight_kg:.0f} kg)")
-        try_upload(fit_path, cfg)
+        powers   = [tp.get("power_w", 0.0) for tp in trackpoints if tp.get("power_w", 0.0) > 0]
+        avg_pwr  = int(sum(powers) / len(powers)) if powers else 0
+        max_pwr  = int(max(powers)) if powers else 0
+        work_kj  = int(sum(powers) * POLL_INTERVAL / 1000) if powers else 0
+        hrs      = [tp["heart_rate"] for tp in trackpoints if tp.get("heart_rate", 0) > 0]
+        hr_str   = f" · {int(sum(hrs)/len(hrs))} bpm Ø" if hrs else ""
+        strava_desc = (
+            f"⚡ {avg_pwr} W Ø · {max_pwr} W max · {work_kj} kJ"
+            f" · {dist_km:.2f} km · {total_kcal} kcal{hr_str}"
+            "\n📊 Flexispot Treadmill (Shelly power meter)"
+        )
+        try_upload(fit_path, cfg, description=strava_desc)
         garmin_id = try_upload_garmin(fit_path, cfg, start_time)
         try_render(start_time, trackpoints, fit_path, cfg, garmin_id)
         try_render_display(start_time, trackpoints, fit_path, cfg)
