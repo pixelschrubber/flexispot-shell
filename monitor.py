@@ -27,6 +27,7 @@ from treadmill import (
     metabolic_power_w,
     power_to_speed,
     save_activity,
+    save_pending_session,
 )
 from strava import try_upload
 from garmin import try_upload as try_upload_garmin
@@ -82,10 +83,15 @@ def save_session(start_time: datetime, trackpoints: list[dict], weight_kg: float
         f"Avg pace: {pace_str}  |  "
         f"Calories: {total_kcal} kcal"
     )
-    try_upload(fit_path, cfg)
-    garmin_id = try_upload_garmin(fit_path, cfg, start_time)
-    try_render(start_time, trackpoints, fit_path, cfg, garmin_id)
-    try_render_display(start_time, trackpoints, fit_path, cfg)
+
+    if cfg.get("accumulate_daily"):
+        pending_path = save_pending_session(start_time, trackpoints)
+        log.info(f"Buffered to {pending_path.name} (accumulate_daily — upload via xbar)")
+    else:
+        try_upload(fit_path, cfg)
+        garmin_id = try_upload_garmin(fit_path, cfg, start_time)
+        try_render(start_time, trackpoints, fit_path, cfg, garmin_id)
+        try_render_display(start_time, trackpoints, fit_path, cfg)
 
     updated = st.record_session(dist_km, duration, total_kcal)
     st.check_milestones(updated, dist_km)

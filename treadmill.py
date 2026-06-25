@@ -3,7 +3,7 @@
 
 import json
 import urllib.request
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 _BASE            = Path(__file__).resolve().parent
@@ -213,6 +213,9 @@ def write_fit(start_time: datetime, trackpoints: list[dict], output_path: Path) 
     _write_fit(start_time, trackpoints, output_path)
 
 
+POLL_INTERVAL = 5  # seconds between power readings
+
+
 def save_activity(start_time: datetime, trackpoints: list[dict]) -> tuple[Path, Path]:
     """Save both TCX and FIT to activities/. Returns (tcx_path, fit_path)."""
     stem    = start_time.strftime("treadmill_%Y%m%d_%H%M%S")
@@ -221,3 +224,126 @@ def save_activity(start_time: datetime, trackpoints: list[dict]) -> tuple[Path, 
     write_tcx(start_time, trackpoints, tcx_out)
     write_fit(start_time, trackpoints, fit_out)
     return tcx_out, fit_out
+
+
+# ── Daily accumulation ────────────────────────────────────────────────────────
+
+def today_date_str() -> str:
+    return datetime.now().strftime("%Y%m%d")
+
+
+def _pending_path(date_str: str) -> Path:
+    return OUTPUT_DIR / f"pending_{date_str}.json"
+
+
+def save_pending_session(start_time: datetime, trackpoints: list[dict]) -> Path:
+    """Append session trackpoints to the daily pending buffer for later upload."""
+    date_str     = start_time.strftime("%Y%m%d")
+    pending_path = _pending_path(date_str)
+    sessions     = []
+    if pending_path.exists():
+        sessions = json.loads(pending_path.read_text())
+    sessions.append({
+        "start_ts": start_time.isoformat(),
+        "trackpoints": [
+            {k: (v.isoformat() if isinstance(v, datetime) else v) for k, v in tp.items()}
+            for tp in trackpoints
+        ],
+    })
+    OUTPUT_DIR.mkdir(exist_ok=True)
+    pending_path.write_text(json.dumps(sessions))
+    return pending_path
+
+
+def load_pending_sessions(date_str: str) -> tuple:
+    """Return (path, sessions_list) for the given date string (YYYYMMDD)."""
+    path = _pending_path(date_str)
+    if not path.exists():
+        return path, []
+    return path, json.loads(path.read_text())
+
+
+def pending_session_count(date_str: str) -> int:
+    _, sessions = load_pending_sessions(date_str)
+    return len(sessions)
+
+
+def _merge_pending_sessions(sessions: list) -> tuple:
+    """Merge buffered sessions into a single trackpoint list with cumulative distances."""
+    all_trackpoints = []
+    cumulative_distance = 0.0
+    first_start = None
+
+    for session in sessions:
+        start_time = datetime.fromisoformat(session["start_ts"])
+        if first_start is None:
+            first_start = start_time
+
+        for raw_tp in session["trackpoints"]:
+            tp = {k: (datetime.fromisoformat(v) if k == "time" else v)
+                  for k, v in raw_tp.items()}
+            tp["distance_m"] = cumulative_distance + raw_tp["distance_m"]
+            all_trackpoints.append(tp)
+
+        if session["trackpoints"]:
+            cumulative_distance += session["trackpoints"][-1]["distance_m"]
+
+    return first_start or datetime.now(timezone.utc), all_trackpoints
+
+
+def upload_pending_sessions(date_str: str, cfg: dict) -> tuple:
+    """Merge all pending sessions for *date_str* and upload as one activity.
+
+    Returns (success: bool, message: str).
+    """
+    pending_path, sessions = load_pending_sessions(date_str)
+    if not sessions:
+        return False, "Keine offenen Sessions gefunden"
+
+    first_start, all_trackpoints = _merge_pending_sessions(sessions)
+    if not all_trackpoints:
+        return False, "Keine Trackpoints in den offenen Sessions"
+
+    duration   = (all_trackpoints[-1]["time"] - first_start).total_seconds()
+    dist_km    = all_trackpoints[-1]["distance_m"] / 1000
+    total_kcal = int(sum(tp.get("kcal", 0.0) for tp in all_trackpoints))
+
+    print(f"\n{len(sessions)} Sessions zusammenführen → {dist_km:.2f} km, "
+          f"{fmt_duration(duration)}, {total_kcal} kcal")
+
+    stem     = f"treadmill_{date_str}_daily"
+    tcx_path = OUTPUT_DIR / f"{stem}.tcx"
+    fit_path = OUTPUT_DIR / f"{stem}.fit"
+    write_tcx(first_start, all_trackpoints, tcx_path)
+    write_fit(first_start, all_trackpoints, fit_path)
+    print(f"  FIT: {fit_path}")
+    print(f"  TCX: {tcx_path}")
+
+    from strava import try_upload
+    from garmin import try_upload as try_upload_garmin
+    from visualize import try_render
+    from display import try_render_display
+
+    powers  = [tp.get("power_w", 0.0) for tp in all_trackpoints if tp.get("power_w", 0.0) > 0]
+    avg_pwr = int(sum(powers) / len(powers)) if powers else 0
+    max_pwr = int(max(powers)) if powers else 0
+    work_kj = int(sum(powers) * POLL_INTERVAL / 1000) if powers else 0
+    hrs     = [tp["heart_rate"] for tp in all_trackpoints if tp.get("heart_rate", 0) > 0]
+    hr_str  = f" · {int(sum(hrs)/len(hrs))} bpm Ø" if hrs else ""
+    strava_desc = (
+        f"⚡ {avg_pwr} W Ø · {max_pwr} W max · {work_kj} kJ"
+        f" · {dist_km:.2f} km · {total_kcal} kcal{hr_str}"
+        f"\n{len(sessions)} Sessions"
+        "\n📊 Flexispot Treadmill (Shelly power meter)"
+    )
+
+    try_upload(fit_path, cfg, description=strava_desc)
+    garmin_id = try_upload_garmin(fit_path, cfg, first_start)
+    try_render(first_start, all_trackpoints, fit_path, cfg, garmin_id)
+    try_render_display(first_start, all_trackpoints, fit_path, cfg)
+
+    done_path = pending_path.with_suffix(".done")
+    pending_path.rename(done_path)
+    print(f"\n✅ Fertig — {done_path.name}")
+
+    return True, f"{len(sessions)} Sessions, {dist_km:.2f} km, {fmt_duration(duration)}, {total_kcal} kcal"

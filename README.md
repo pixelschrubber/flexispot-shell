@@ -164,6 +164,43 @@ python3 garmin.py upload activities/treadmill_20250611_120000.fit
 
 ---
 
+## Daily accumulation
+
+If you walk in several short bursts throughout the day (a few minutes here and there between tasks), each session would create a separate Garmin/Strava entry. Enable daily accumulation to buffer all sessions locally and upload them as a **single combined activity** at the end of the day instead:
+
+```json
+{
+  "shelly_ip": "192.168.1.xxx",
+  "user_weight_kg": 75.0,
+  "accumulate_daily": true
+}
+```
+
+**What changes:**
+- Each session is still saved as individual FIT + TCX files in `activities/`
+- Gamification stats (streak, weekly distance) update after every session as usual
+- Garmin/Strava upload is **deferred** — no immediate sync
+
+**Triggering the upload:**
+
+When there are buffered sessions, the xbar idle menu shows a new item:
+
+```
+📤 Heute hochladen (3 Sessions)
+```
+
+Clicking it opens a terminal, merges all of today's sessions into one activity (cumulative distance, real timestamps, pauses visible as gaps), uploads to Garmin + Strava, and marks the buffer as done.
+
+Alternatively from the command line:
+
+```bash
+python3 track.py --upload-today
+```
+
+The combined file is saved as `activities/treadmill_YYYYMMDD_daily.fit/.tcx` and the pending buffer is renamed to `pending_YYYYMMDD.done` (kept as a backup).
+
+---
+
 ## Tracking modes in detail
 
 ### Terminal tracker (`track.py`)

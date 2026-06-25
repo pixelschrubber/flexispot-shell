@@ -19,6 +19,9 @@ from treadmill import (
     load_config,
     power_to_speed,
     save_activity,
+    save_pending_session,
+    today_date_str,
+    upload_pending_sessions,
 )
 from strava import try_upload
 from garmin import try_upload as try_upload_garmin
@@ -77,10 +80,15 @@ def main():
             f" · {dist_km:.2f} km · {total_kcal} kcal{hr_str}"
             "\n📊 Flexispot Treadmill (Shelly power meter)"
         )
-        try_upload(fit_path, cfg, description=strava_desc)
-        garmin_id = try_upload_garmin(fit_path, cfg, start_time)
-        try_render(start_time, trackpoints, fit_path, cfg, garmin_id)
-        try_render_display(start_time, trackpoints, fit_path, cfg)
+        if cfg.get("accumulate_daily"):
+            pending_path = save_pending_session(start_time, trackpoints)
+            print(f"\nGepuffert in {pending_path.name} (accumulate_daily)")
+            print("Upload via xbar-Menü oder: python track.py --upload-today")
+        else:
+            try_upload(fit_path, cfg, description=strava_desc)
+            garmin_id = try_upload_garmin(fit_path, cfg, start_time)
+            try_render(start_time, trackpoints, fit_path, cfg, garmin_id)
+            try_render_display(start_time, trackpoints, fit_path, cfg)
         sys.exit(0)
 
     signal.signal(signal.SIGINT, finish)
@@ -145,4 +153,12 @@ def main():
 
 
 if __name__ == "__main__":
+    if "--upload-today" in sys.argv:
+        cfg = load_config()
+        success, msg = upload_pending_sessions(today_date_str(), cfg)
+        if success:
+            print(f"\n✅ {msg}")
+        else:
+            print(f"\n❌ {msg}")
+        sys.exit(0 if success else 1)
     main()

@@ -31,6 +31,9 @@ from treadmill import (
     speed_to_met,
     fmt_duration,
     OUTPUT_DIR,
+    pending_session_count,
+    today_date_str,
+    upload_pending_sessions,
 )
 
 STATE_FILE     = Path(__file__).resolve().parent / "session_state.json"
@@ -215,6 +218,11 @@ def main():
             pass
         # ─────────────────────────────────────────────────────────────────────
 
+        n_pending = pending_session_count(today_date_str())
+        if n_pending > 0:
+            tag = "Session" if n_pending == 1 else "Sessions"
+            print("---")
+            print(f"📤 Heute hochladen ({n_pending} {tag}) | bash={PY} param1={SCRIPT_PATH} param2=upload-today terminal=true refresh=true")
         print("---")
         print(f"Shelly ausschalten | bash={PY} param1={SCRIPT_PATH} param2=shelly-off terminal=false refresh=true")
         print("---")
@@ -231,4 +239,12 @@ if __name__ == "__main__":
             cfg = load_config()
             set_shelly_power(cfg["shelly_ip"], cmd == "shelly-on")
             sys.exit(0)
+        if cmd == "upload-today":
+            cfg = load_config()
+            success, msg = upload_pending_sessions(today_date_str(), cfg)
+            if success:
+                print(f"\n✅ {msg}")
+            else:
+                print(f"\n❌ {msg}")
+            sys.exit(0 if success else 1)
     main()
